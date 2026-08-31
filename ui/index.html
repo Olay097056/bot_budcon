@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bot_budcon</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --fg: #e6e9ef;
+        --muted: #8b95a4;
+        --accent: #6ee7b7;
+        --warn: #fbbf24;
+        --err: #f87171;
+        --border: #1f2937;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.5 ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+      header { display: flex; align-items: baseline; gap: 12px; }
+      h1 { font-size: 18px; margin: 0; }
+      .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+        vertical-align: middle;
+      }
+      .dot.alive  { background: var(--accent); }
+      .dot.warn   { background: var(--warn); }
+      .dot.err    { background: var(--err); }
+      section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
+      button {
+        background: var(--accent);
+        color: #04140d;
+        border: 0;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: 8px;
+      }
+      button[disabled] { opacity: 0.5; cursor: not-allowed; }
+      button.secondary { background: var(--border); color: var(--fg); }
+      pre {
+        margin: 0;
+        background: #06080c;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        max-height: 240px;
+        overflow: auto;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--muted);
+      }
+      .row { display: flex; gap: 16px; align-items: center; }
+      .row .kv { display: flex; flex-direction: column; }
+      .row .kv span:first-child { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+      .row .kv span:last-child  { font: 13px ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>bot_budcon</h1>
+        <span id="dot" class="dot" title="engine status"></span>
+        <span id="status-text" style="color: var(--muted)">connecting…</span>
+      </header>
+
+      <section>
+        <h2>Engine</h2>
+        <div class="row">
+          <div class="kv"><span>chromeAlive</span><span id="chromeAlive">—</span></div>
+          <div class="kv"><span>loggedIn</span><span id="loggedIn">—</span></div>
+          <div class="kv"><span>watchActive</span><span id="watchActive">—</span></div>
+          <div class="kv"><span>sensorReady</span><span id="sensorReady">—</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Actions</h2>
+        <button id="login-btn" type="button">🔓 Login</button>
+        <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
+        <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
+        <p id="action-note" style="color: var(--muted); margin: 8px 0 0;"></p>
+      </section>
+
+      <section>
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script>
+      // Polling the status endpoint every 2 s. Cheap, no fetch library needed.
+      const $ = (id) => document.getElementById(id);
+      let currentStatus = null;
+
+      async function tick() {
+        try {
+          const r = await fetch('/api/status');
+          if (!r.ok) throw new Error('status ' + r.status);
+          const s = await r.json();
+          currentStatus = s;
+          $('chromeAlive').textContent = String(s.chromeAlive);
+          $('loggedIn').textContent   = String(s.loggedIn);
+          $('watchActive').textContent = String(s.watchActive);
+          $('sensorReady').textContent = String(s.sensorReady);
+
+          const dot = $('dot');
+          const label = $('status-text');
+          if (!s.sensorReady) {
+            dot.className = 'dot err';
+            label.textContent = 'sensor not ready';
+          } else if (s.loggedIn && s.watchActive) {
+            dot.className = 'dot alive';
+            label.textContent = 'watching';
+          } else if (s.loggedIn) {
+            dot.className = 'dot alive';
+            label.textContent = 'logged in';
+          } else if (s.chromeAlive) {
+            dot.className = 'dot warn';
+            label.textContent = 'browser ready, not logged in';
+          } else {
+            dot.className = 'dot';
+            label.textContent = 'idle';
+          }
+
+          $('login-btn').disabled  = s.loggedIn || s.watchActive;
+          $('watch-btn').disabled  = !s.loggedIn || s.watchActive;
+          $('stop-btn').disabled   = !s.watchActive;
+
+          const log = $('log');
+          log.textContent = (s.lastLog || []).slice(-50).join('\n');
+          log.scrollTop = log.scrollHeight;
+        } catch (e) {
+          $('status-text').textContent = 'unreachable (' + e.message + ')';
+          $('dot').className = 'dot err';
+        }
+      }
+
+      // Login button — ticket 04 wires the real endpoint; for now
+      // we 501, so just show the response text in the note.
+      $('login-btn').addEventListener('click', async () => {
+        $('action-note').textContent = 'starting login…';
+        try {
+          const r = await fetch('/api/login/start', { method: 'POST' });
+          const body = await r.text();
+          $('action-note').textContent = r.ok ? 'login started' : ('login: ' + r.status + ' ' + body);
+        } catch (e) {
+          $('action-note').textContent = 'login error: ' + e.message;
+        }
+      });
+
+      // Watch / Stop are placeholders for ticket 05.
+      $('watch-btn').addEventListener('click', () => {
+        $('action-note').textContent = 'watch: not implemented yet (ticket 05)';
+      });
+      $('stop-btn').addEventListener('click', () => {
+        $('action-note').textContent = 'stop: not implemented yet (ticket 05)';
+      });
+
+      tick();
+      setInterval(tick, 2000);
+    </script>
+  </body>
+</html>
