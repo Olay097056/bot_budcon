@@ -48,7 +48,41 @@ export const config = {
   ttm: {
     signinUrl: process.env.BOT_BUDCON_SIGNIN_URL
       ?? 'https://www.thaiticketmajor.com/user/signin.php',
-    // Populated by ticket 03 (site recon).
+    /**
+     * Known on-sale events as of session close (2026-08-31).
+     * Use BOT_BUDCON_TARGET to pick one for the watch loop:
+     *   BOT_BUDCON_TARGET=idol1st  BOT_BUDCON_TARGET=lany
+     *   BOT_BUDCON_TARGET=joji     BOT_BUDCON_TARGET=babymonster
+     *   BOT_BUDCON_TARGET=dreaming
+     * The `query` field is the trailing path segment TTM uses for
+     * `booking/3m/zones.php?query=<x>`. The `event` field is the
+     * slug TTM uses for the public concert page.
+     */
+    targets: {
+      idol1st: {
+        event: 'idol1st-kenty-asia-tour-2026-in-bangkok',
+        query: '504',
+      },
+      lany: {
+        event: 'lany-soft-world-tour-bangkok',
+        query: 'lany',
+      },
+      joji: {
+        event: 'joji-solaris-tour-2026',
+        query: 'joji',
+      },
+      babymonster: {
+        event: '2026-27-babymonster-world-tour-choom-in-bangkok',
+        query: 'babymonster',
+      },
+      dreaming: {
+        event: 'dreaming-tomohisa-yamashita-tour-2026-live-in-bangkok',
+        query: 'dreaming',
+      },
+    } as const,
+    /** BOT_BUDCON_TARGET overrides the default watch target. */
+    targetKey: (process.env.BOT_BUDCON_TARGET ?? 'idol1st') as
+      | 'idol1st' | 'lany' | 'joji' | 'babymonster' | 'dreaming',
   },
 } as const;
 
