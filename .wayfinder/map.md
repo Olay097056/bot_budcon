@@ -112,6 +112,13 @@ A TTM booking bot that can grab tickets faster than humanly possible
   three-state pill (green = authenticated, yellow = expiring in
   < 5 min, red = bad). Suite total now 63/63 GREEN.
 
+## Next session (open)
+
+- [Ticket 11 — Auto re-login](.wayfinder/tickets/11-auto-relogin.md):
+  when the auth-cookie gate pill goes red, run `LoginFlow.run()`
+  once and re-consult `gate()` before refusing. ~40 LOC + 3 tests.
+  Spec written; no code yet.
+
 ## Not yet specified
 
 - Captcha detection on the TTM login page (might need human-in-the-loop
