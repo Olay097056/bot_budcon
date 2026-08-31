@@ -1,11 +1,31 @@
 /**
  * bot_budcon — CLI entry point.
  *
- * Intentionally throws for now; tickets 02 (bot engine), 04 (login),
- * and 05 (watch) wire up the actual CLI subcommands.
+ * Subcommands wire up in their own tickets:
+ *   - `login` (ticket 04)
+ *   - `watch` (ticket 05)
+ *   - `ui`    (ticket 06)
+ *
+ * For now this only exports the engine so ticket 02 can be smoke-
+ * tested from a script without a UI.
  */
-function main(): void {
-  throw new Error('not implemented yet — see .wayfinder/tickets/');
+export { BotEngine } from './bot-engine.js';
+
+async function main(): Promise<void> {
+  const subcommand = process.argv[2];
+  if (subcommand !== undefined) {
+    // eslint-disable-next-line no-console
+    console.error(`unknown subcommand: ${subcommand}`);
+    // eslint-disable-next-line no-console
+    console.error('available subcommands: (none yet — see .wayfinder/tickets/)');
+    process.exit(2);
+  }
+  // eslint-disable-next-line no-console
+  console.log('bot_budcon: no subcommand given. import BotEngine from "./bot-engine.js" to drive it.');
 }
 
-main();
+main().catch((e: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error('fatal:', e instanceof Error ? e.stack ?? e.message : e);
+  process.exit(1);
+});
