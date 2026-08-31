@@ -39,6 +39,13 @@ A TTM booking bot that can grab tickets faster than humanly possible
   (`fetch('https://www.thaiticketmajor.com/')` → 200 OK + Akamai `bm_mi`
   cookie). TLS ClientHello blocker from ticket 07 is fixed. Go install
   deferred to ticket 04 (sensor phase). Implementing now.
+- [Close ticket 02 — bot engine base](src/bot-engine.ts): Two transports
+  (wreq-js + Playwright persistent Firefox) sharing cookies.json. Live
+  smoke test passes for all three critical TTM endpoints including the
+  concert detail URL that returned 407 in the prior session — now 200 OK
+  (63 052 B). 3/3 unit tests passing, typecheck clean. Go sensor sidecar
+  deferred to ticket 04. Commit `e88687d` on local `main`, no remote
+  configured.
 
 ## Not yet specified
 
