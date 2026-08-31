@@ -1,0 +1,152 @@
+/**
+ * bot_budcon — book flow unit tests.
+ *
+ * Mocks Playwright `Page` and `BrowserContext` so we can assert
+ * each step was called in order without a real browser. The
+ * tests verify selectors + step transitions, not real Akamai
+ * flows — those live in a real-Firefox smoke test (todo).
+ */
+import { describe, it, expect, vi } from 'vitest';
+import {
+  selectZone,
+  selectQuantity,
+  confirmSeats,
+  payment,
+  finalConfirm,
+  HumanStepRequired,
+  type BookResult,
+} from '../src/book.js';
+
+interface MockPage {
+  $: ReturnType<typeof vi.fn>;
+  fill: ReturnType<typeof vi.fn>;
+  press: ReturnType<typeof vi.fn>;
+  click: ReturnType<typeof vi.fn>;
+  waitForLoadState: ReturnType<typeof vi.fn>;
+  screenshot: ReturnType<typeof vi.fn>;
+  textContent: ReturnType<typeof vi.fn>;
+  goto: ReturnType<typeof vi.fn>;
+  url: ReturnType<typeof vi.fn>;
+}
+
+function pageWithElement(selectorToEl: Record<string, unknown>): MockPage {
+  const page: MockPage = {
+    $: vi.fn((sel: string) => selectorToEl[sel] ?? null),
+    fill: vi.fn(async () => undefined),
+    press: vi.fn(async () => undefined),
+    click: vi.fn(async () => undefined),
+    waitForLoadState: vi.fn(async () => undefined),
+    screenshot: vi.fn(async () => undefined),
+    textContent: vi.fn(async () => null),
+    goto: vi.fn(async () => undefined),
+    url: vi.fn(() => 'about:blank'),
+  };
+  return page;
+}
+
+describe('selectZone()', () => {
+  it('clicks the matched zone anchor', async () => {
+    const link = { click: vi.fn(async () => undefined) };
+    const page = pageWithElement({ 'a[href*="#fixed.php#A1"]': link });
+    const r = await selectZone(page as never, 'A1');
+    expect(r.ok).toBe(true);
+    expect(link.click).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to festival.php#X anchors', async () => {
+    const link = { click: vi.fn(async () => undefined) };
+    const page = pageWithElement({ 'a[href*="#festival.php#F2"]': link });
+    const r = await selectZone(page as never, 'F2');
+    expect(r.ok).toBe(true);
+  });
+
+  it('returns error when no anchor matches', async () => {
+    const page = pageWithElement({});
+    const r = await selectZone(page as never, 'A1');
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no anchor/);
+  });
+});
+
+describe('selectQuantity()', () => {
+  it('fills the qty input when present', async () => {
+    const el = { fill: vi.fn(async () => undefined), press: vi.fn(async () => undefined) };
+    const page = pageWithElement({ 'input[name="qty"], input[name="quantity"], select[name="qty"]': el });
+    const r = await selectQuantity(page as never, 2);
+    expect(r.ok).toBe(true);
+    expect(el.fill).toHaveBeenCalledWith('2');
+  });
+
+  it('is a no-op when no qty input exists (defaults to 1)', async () => {
+    const page = pageWithElement({});
+    const r = await selectQuantity(page as never, 1);
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('confirmSeats()', () => {
+  it('clicks the confirm button', async () => {
+    const btn = { click: vi.fn(async () => undefined) };
+    const page = pageWithElement({
+      'button[name="confirm"], button:has-text("Confirm"), button:has-text("Continue")': btn,
+    });
+    const r = await confirmSeats(page as never);
+    expect(r.ok).toBe(true);
+    expect(btn.click).toHaveBeenCalledOnce();
+  });
+
+  it('returns error when no confirm button exists', async () => {
+    const page = pageWithElement({});
+    const r = await confirmSeats(page as never);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no confirm button/);
+  });
+});
+
+describe('payment()', () => {
+  it('returns ok when fields are absent (form filled by human)', async () => {
+    const page = pageWithElement({});
+    const r = await payment(page as never);
+    expect(r.ok).toBe(true);
+  });
+
+  it('does not auto-fill card data (security: human fills it)', async () => {
+    // We deliberately leave `value: ''` in the field map so the
+    // bot never autofills. This test guards against regressions
+    // where someone wires actual card data in.
+    const el = { fill: vi.fn(async () => undefined) };
+    const page = pageWithElement({
+      'input[name="cardNumber"], input[name="cc-number"]': el,
+    });
+    await payment(page as never);
+    expect(el.fill).not.toHaveBeenCalled();
+  });
+});
+
+describe('finalConfirm()', () => {
+  it('clicks confirm and reads the booking id', async () => {
+    const idEl = { textContent: vi.fn(async () => 'TTM-9F8X2') };
+    const btn = { click: vi.fn(async () => undefined) };
+    const page = pageWithElement({
+      'button:has-text("Confirm"), button[name="finalize"]': btn,
+      '.booking-id, .confirmation-id, [data-confirmation-id]': idEl,
+    });
+    const r = await finalConfirm(page as never, '/tmp/shot.png');
+    expect(r.ok).toBe(true);
+    expect(r.confirmationId).toBe('TTM-9F8X2');
+    expect(r.screenshotPath).toBe('/tmp/shot.png');
+    expect(page.screenshot).toHaveBeenCalledWith({
+      path: '/tmp/shot.png',
+      fullPage: true,
+    });
+  });
+});
+
+describe('HumanStepRequired', () => {
+  it('carries the step name and is a typed Error subclass', () => {
+    const e = new HumanStepRequired('payment');
+    expect(e).toBeInstanceOf(Error);
+    expect(e.step).toBe('payment');
+    expect(e.message).toMatch(/payment/);
+  });
+});

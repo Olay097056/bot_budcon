@@ -69,6 +69,20 @@ A TTM booking bot that can grab tickets faster than humanly possible
   styles with dedup. 10 watch + zone unit tests passing. Book flow
   itself is out of scope — the loop only detects new availability,
   a future ticket will click through the purchase UI.
+- [Close ticket 03 — TTM site recon](docs/recon/): WAF + cert + cookie
+  observations across five TTM endpoints. Root domain is Akamai
+  edgesuite-fronted (407 Proxy Auth Required for bot fingerprints),
+  `event.thaiticketmajor.com` cert validates cleanly from this host
+  (Let's Encrypt, SAN includes `booking.*`), booking subdomain is
+  Huawei Cloud WAF + Akamai EdgeAccelerator. Sub-deliverable for
+  ticket 07B: 26 candidate bypass repos analyzed via four parallel
+  subagents.
+- [Claim ticket 08 — book flow](src/book.ts): six-step purchase
+  (selectZone, selectQuantity, confirmSeats, payment, finalConfirm).
+  Each step returns a typed `BookResult` so partial progress is
+  recoverable. `payment` is intentionally the human-handoff step
+  (`HumanStepRequired`) — captcha + 3-D Secure stay in the visible
+  Firefox window. 11 unit tests passing; suite total 38/38 GREEN.
 
 ## Not yet specified
 
