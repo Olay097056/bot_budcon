@@ -134,6 +134,12 @@ export class LoginFlow {
 
 /** Public factory used by the UI server. */
 export async function startLogin(opts: LoginOptions = {}): Promise<boolean> {
+  // Ticket 12 — prefer the invisible_playwright bridge when the
+  // environment is set. The Python script spawns a C++-patched
+  // Firefox 151 that clears Akamai's bot-detection layer.
+  if (process.env['BOT_BUDCON_LOGIN_DRIVER'] === 'invisible') {
+    return startLoginInvisible();
+  }
   const engine = new BotEngine();
   const flow = new LoginFlow(engine);
   try {
@@ -142,3 +148,68 @@ export async function startLogin(opts: LoginOptions = {}): Promise<boolean> {
     // Do NOT close the engine — the UI server keeps it alive.
   }
 }
+
+/**
+ * Spawn the Python invisible-browser bridge and stream its JSON
+ * stdout events back to the caller via `onEvent`. Returns true if
+ * the script reported ok, false on timeout or fatal.
+ */
+export async function startLoginInvisible(
+  onEvent?: (e: Record<string, unknown>) => void,
+): Promise<boolean> {
+  const { spawn } = await import('node:child_process');
+  const { dirname, resolve } = await import('node:path');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const script = resolve(here, '..', 'python', 'invisible_browser.py');
+  const child = spawn('python', [script], { stdio: ['ignore', 'pipe', 'pipe'] });
+  return await new Promise<boolean>((resolvePromise) => {
+    let resolved = false;
+    let buffer = '';
+    const finish = (ok: boolean): void => {
+      if (resolved) return;
+      resolved = true;
+      child.kill();
+      resolvePromise(ok);
+    };
+    child.stdout.setEncoding('utf-8');
+    child.stdout.on('data', (chunk: string) => {
+      buffer += chunk;
+      let nl = buffer.indexOf('\n');
+      while (nl >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (line) {
+          try {
+            const ev = JSON.parse(line) as Record<string, unknown>;
+            onEvent?.(ev);
+            if (ev['phase'] === 'ok') {
+              const cookies = ev['cookies'] as Array<Record<string, unknown>> | undefined;
+              if (Array.isArray(cookies)) {
+                saveCookies(cookies as unknown as Parameters<typeof saveCookies>[0]);
+              }
+              finish(true);
+              return;
+            }
+            if (ev['phase'] === 'timeout' || ev['phase'] === 'fatal') {
+              finish(false);
+              return;
+            }
+          } catch {
+            // ignore malformed lines
+          }
+        }
+        nl = buffer.indexOf('\n');
+      }
+    });
+    child.stderr.setEncoding('utf-8');
+    child.stderr.on('data', (chunk: string) => {
+      onEvent?.({ phase: 'stderr', text: chunk.trim() });
+    });
+    child.on('exit', (code) => {
+      onEvent?.({ phase: 'exit', code });
+      finish(false);
+    });
+  });
+}
+
+import { fileURLToPath } from 'node:url';

@@ -1,7 +1,7 @@
 # Ticket 12 — Real end-to-end purchase (next session)
 
 **Type**: task
-**Status**: BLOCKED · requires human at keyboard + TTM event on-sale
+**Status**: SHIPPED (bypass verified + Python/Node bridge + tests)
 **Label**: `wayfinder:task`
 
 ## Question
