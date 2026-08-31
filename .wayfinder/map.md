@@ -94,6 +94,14 @@ A TTM booking bot that can grab tickets faster than humanly possible
   probe artifacts (raw HTML + JS + probe-results.json) live under
   `tickets/09/raw/` so the next session can re-probe after any
   TTM-side change without re-deriving the URLs.
+- [Claim ticket 10 — auth-cookie persistence](src/auth-cookies.ts):
+  classifiers that distinguish Phase-1 TLS cookies (ak_bmsc /
+  bm_sz / bm_mi), session cookies (PHPSESSID / HWWAFSESID), and
+  auth cookies (ttkname / ttkemail / tixid). `gate()` returns
+  `accept | no_auth | expired | no_phase1` so `book()` can refuse
+  to open checkout before TTM redirects to signin. 20 unit tests
+  added; suite total 58/58 GREEN. UI wiring into the dashboard
+  status pill is the next concrete task.
 
 ## Not yet specified
 
