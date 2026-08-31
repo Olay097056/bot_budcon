@@ -52,6 +52,23 @@ A TTM booking bot that can grab tickets faster than humanly possible
   dashboard with dark theme, status dot, log pane, polls every 2 s.
   No bundler / framework — server reads ui/index.html off disk.
   6/6 vitest passing. Commit `1947ebd` on local `main`.
+- [Close ticket 04 — login flow](src/login.ts + src/cookies.ts):
+  Playwright persistent Firefox polls for PHPSESSID + a user-id cookie
+  (ttkname / ttkemail / tixid) every 2 s for up to 5 minutes, persists
+  via `saveCookies()`. Partial sessions (PHPSESSID only) are also
+  saved so the next launch can resume. Root-domain signin URL because
+  bot-spawn Firefox can't verify `event.thaiticketmajor.com`'s cert
+  chain (per ticket 07 recon). Cookies module: normalize, expire filter,
+  buildCookieHeader (apex or strict subdomain of host). 11 cookies
+  unit tests passing.
+- [Close ticket 05 — watch loop](src/watch.ts + src/zones.ts):
+  Async generator polls zones page every `intervalMs` (default 5 s),
+  records the first response as baseline, fires on any new zone code
+  that appears afterward. `parseZones` extracts codes from area
+  anchors, <a href="#fixed.php#X">, and onclick="#fixed.php#X"
+  styles with dedup. 10 watch + zone unit tests passing. Book flow
+  itself is out of scope — the loop only detects new availability,
+  a future ticket will click through the purchase UI.
 
 ## Not yet specified
 
