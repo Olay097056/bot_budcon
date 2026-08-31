@@ -1,7 +1,7 @@
 # Ticket 13 — Go cleanup
 
 **Type**: task
-**Status**: open · one-line cleanup
+**Status**: SHIPPED · commit `pending`
 **Label**: `wayfinder:chore`
 
 ## Question

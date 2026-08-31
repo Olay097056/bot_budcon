@@ -1,7 +1,7 @@
 # Ticket 12 — Real end-to-end purchase (next session)
 
 **Type**: task
-**Status**: open · needs the human at the keyboard
+**Status**: BLOCKED · requires human at keyboard + TTM event on-sale
 **Label**: `wayfinder:task`
 
 ## Question

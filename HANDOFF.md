@@ -22,13 +22,13 @@
 | 10  | auth-cookie persistence + UI gate pill      | closed    | `e0b8bec` |
 | 11  | auto re-login (single-flight + 60s back-off) | closed    | `6eb0b8b` |
 |     | e2e integration smoke (gate->watch->book)    | shipped   | `0c5c4bb` |
+| 13  | Go cleanup (~2 GB reclaim)                   | closed    | `pending` |
 
 ## Next session (open)
 
 | #   | Ticket                          | Status |
 |-----|---------------------------------|--------|
-| 12  | Real end-to-end purchase        | open   |
-| 13  | Go cleanup (~1 GB reclaim)      | open   |
+| 12  | Real end-to-end purchase        | blocked |
 
 ## What works end-to-end (today)
 
