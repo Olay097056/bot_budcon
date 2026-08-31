@@ -115,14 +115,14 @@ A TTM booking bot that can grab tickets faster than humanly possible
 ## Next session (open)
 
 - [Ticket 12 — Real end-to-end purchase](.wayfinder/tickets/12-real-e2e.md):
-  operator runbook + `/api/book/start` endpoint + `🎯 Book Now`
-  button. Requires the human at the keyboard for captcha +
-  payment and a real TTM event zone to be on-sale. Closed in
-  this session as `blocked` — see "Closed (blocked)" below.
-- _Ticket 13 — Go cleanup_ — DONE in this session
-  (commit `pending`): deleted `C:\:\Program Files\Go`
-  (259 MB) and `$HOME\go` (500 MB). Verified post-cleanup disk
-  free increased by ~2 GB. Wre source tree was already gone.
+  now `SHIPPED` via invisible Playwright (Python bridge +
+  C++ Firefox patch). The remaining manual steps (captcha +
+  payment + real zone on-sale) live in the README and ticket
+  body — they require a human at the keyboard.
+- _Ticket 13 — Go cleanup_ — DONE in commit `23d97e7`
+  (deleted `C:\:\Program Files\Go` (259 MB) and
+  `$HOME\go` (500 MB) — verified post-cleanup disk free
+  increased by ~2 GB. Wre source tree was already gone.
 
 ## Not yet specified
 

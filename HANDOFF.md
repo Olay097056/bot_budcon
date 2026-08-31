@@ -1,8 +1,8 @@
 # bot_budcon — final session summary
 
-**Status**: closed at commit `0c5c4bb` + final docs commit (the one that adds tickets 12/13).
+**Status**: closed at commit `61ce19b` + final docs commit (the one that adds tickets 12/13).
 **Repository**: https://github.com/Olay097056/bot_budcon
-**Tests**: 73/73 vitest passing.
+**Tests**: 80/80 vitest passing.
 **HANDOFF.md**: this file is the canonical handoff for next session.
 
 ## Shipped this session (wayfinder tickets)
@@ -22,13 +22,15 @@
 | 10  | auth-cookie persistence + UI gate pill      | closed    | `e0b8bec` |
 | 11  | auto re-login (single-flight + 60s back-off) | closed    | `6eb0b8b` |
 |     | e2e integration smoke (gate->watch->book)    | shipped   | `0c5c4bb` |
-| 13  | Go cleanup (~2 GB reclaim)                   | closed    | `pending` |
+| 12  | invisible Playwright login (bypass + bridge) | shipped   | `61ce19b` |
+| 13  | Go cleanup (~2 GB reclaim)                   | closed    | `23d97e7` |
 
 ## Next session (open)
 
-| #   | Ticket                          | Status |
-|-----|---------------------------------|--------|
-| 12  | Real end-to-end purchase        | blocked |
+- _None — session shipped clean._
+  Next concrete follow-up is a real login run (human at the
+  keyboard for captcha + payment, then a real TTM event zone
+  on-sale) — both gated on conditions outside this session.
 
 ## What works end-to-end (today)
 
