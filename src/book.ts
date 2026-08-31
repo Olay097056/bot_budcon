@@ -10,8 +10,18 @@
  * the human completes them in the visible Firefox window. We pause
  * at `awaitHuman(...)` and the caller (the UI server) decides what
  * to do.
+ *
+ * Pre-flight gate (ticket 10)
+ * ----------------------------
+ * `book()` consults `gate()` on the persisted cookies before doing
+ * any work. If `gate()` returns `accept: false`, the book flow
+ * refuses with a typed error so the UI can prompt for re-login
+ * instead of opening checkout and getting bounced to signin.
  */
 import type { BrowserContext, Page } from 'playwright';
+import type { StoredCookie } from './cookies.js';
+import { loadCookies } from './cookies.js';
+import { gate } from './auth-cookies.js';
 
 export interface BookOptions {
   context: BrowserContext;
@@ -23,17 +33,21 @@ export interface BookOptions {
   quantity?: number;
   /** Absolute path to drop the final-confirmation screenshot. */
   screenshotPath?: string;
+  /** Override the cookie store (used by tests). */
+  cookies?: StoredCookie[];
 }
 
 export interface BookResult {
   ok: boolean;
   /** Where we stopped. */
-  step: 'selectZone' | 'selectQuantity' | 'confirmSeats' | 'payment' | 'finalConfirm';
+  step: 'gate' | 'selectZone' | 'selectQuantity' | 'confirmSeats' | 'payment' | 'finalConfirm';
   /** Final confirmation number on success. */
   confirmationId?: string;
   screenshotPath?: string;
   /** A typed reason when ok is false. */
   error?: string;
+  /** Auth verdict (when `step === 'gate'`). */
+  gateReason?: 'no_auth' | 'expired' | 'no_phase1';
 }
 
 /** Sentinel thrown by `awaitHuman` to ask the UI to halt for input. */
@@ -49,6 +63,21 @@ export class HumanStepRequired extends Error {
  * needs a human (captcha, 3-D Secure, payment confirmation).
  */
 export async function book(opts: BookOptions): Promise<BookResult> {
+  // 0. Gate (ticket 10). The cookie store might be empty if the
+  //    user has never logged in. Refuse early so the UI can ask.
+  const cookies = opts.cookies ?? loadCookies();
+  const verdict = gate(cookies);
+  if (!verdict.accept) {
+    return {
+      ok: false,
+      step: 'gate',
+      error: verdict.reason
+        ? `auth gate failed: ${verdict.reason}`
+        : 'auth gate failed',
+      gateReason: verdict.reason,
+    };
+  }
+
   const qty = opts.quantity ?? 1;
   const page = opts.context.pages()[0] ?? await opts.context.newPage();
 

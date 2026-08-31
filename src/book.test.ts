@@ -13,9 +13,11 @@ import {
   confirmSeats,
   payment,
   finalConfirm,
+  book,
   HumanStepRequired,
   type BookResult,
 } from '../src/book.js';
+import type { BrowserContext } from 'playwright';
 
 interface MockPage {
   $: ReturnType<typeof vi.fn>;
@@ -148,5 +150,122 @@ describe('HumanStepRequired', () => {
     expect(e).toBeInstanceOf(Error);
     expect(e.step).toBe('payment');
     expect(e.message).toMatch(/payment/);
+  });
+});
+
+describe('book() pre-flight gate (ticket 10)', () => {
+  // Use a far-future timestamp so the test is robust against real
+  // wall-clock drift. `gate()` defaults `nowSec` to `Date.now()`
+  // so any non-future expires trips the "expired" branch.
+  const farFuture = 4_102_444_800; // 2100-01-01 UTC
+  const freshAuth = {
+    name: 'ttkname',
+    value: 'alive',
+    domain: '.thaiticketmajor.com',
+    path: '/',
+    secure: false,
+    httpOnly: false,
+    expires: farFuture,
+  };
+  const phase1 = {
+    name: 'ak_bmsc',
+    value: 'a',
+    domain: '.thaiticketmajor.com',
+    path: '/',
+    secure: false,
+    httpOnly: false,
+    expires: -1,
+  };
+  // Already-expired relative to real wall-clock (2020-01-01).
+  const expiredAuth = { ...freshAuth, expires: 1_577_836_800 };
+
+  // `book()` reaches the gate before touching Playwright, so we
+  // never need to drive a real browser here. Passing `cookies`
+  // overrides the on-disk loadCookies() read.
+  function ctxStub(): BrowserContext {
+    return {
+      pages: () => [],
+      newPage: vi.fn(async () => {
+        throw new Error('should not reach Playwright when gate fails');
+      }),
+    } as never;
+  }
+
+  it('refuses with no_auth when no auth cookie is present', async () => {
+    const r = await book({
+      context: ctxStub(),
+      zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
+      code: 'A1',
+      cookies: [phase1],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.step).toBe('gate');
+    expect(r.gateReason).toBe('no_auth');
+    expect(r.error).toMatch(/no_auth/);
+  });
+
+  it('refuses with no_phase1 when phase1 cookie is missing', async () => {
+    const r = await book({
+      context: ctxStub(),
+      zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
+      code: 'A1',
+      cookies: [freshAuth],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.step).toBe('gate');
+    expect(r.gateReason).toBe('no_phase1');
+  });
+
+  it('refuses with expired when auth cookies exist but all expired', async () => {
+    const r = await book({
+      context: ctxStub(),
+      zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
+      code: 'A1',
+      cookies: [expiredAuth, phase1],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.step).toBe('gate');
+    expect(r.gateReason).toBe('expired');
+  });
+
+  it('passes the gate when auth + phase1 are present and fresh', async () => {
+    // We need to drive the gate past and then fail predictably in
+    // the first Playwright step. Reachability is tested by setting
+    // a code that has no matching anchor on an empty page.
+    const pageStub = {
+      $: vi.fn(async () => null),
+      goto: vi.fn(async () => undefined),
+    };
+    const ctx: BrowserContext = {
+      pages: () => [pageStub as never],
+      newPage: vi.fn(async () => {
+        throw new Error('should reuse existing page');
+      }),
+    } as never;
+    const r = await book({
+      context: ctx,
+      zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
+      code: 'A1',
+      cookies: [freshAuth, phase1],
+    });
+    // The gate passes (no gate verdict in the error), and the
+    // step is one of the Playwright steps (selectZone here, since
+    // there was no anchor).
+    expect(r.step).toBe('selectZone');
+    expect(r.error).toMatch(/no anchor/);
+    expect(r.gateReason).toBeUndefined();
+  });
+
+  it('defaults to reading cookies from disk when none provided', async () => {
+    // With no cookie file at the test path, the loader returns
+    // []. That triggers the no_auth branch — proves the wiring
+    // reads loadCookies() at call time.
+    const r = await book({
+      context: ctxStub(),
+      zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
+      code: 'A1',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.step).toBe('gate');
   });
 });

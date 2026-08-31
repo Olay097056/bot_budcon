@@ -86,6 +86,16 @@
       </section>
 
       <section>
+        <h2>Auth cookie gate (ticket 10)</h2>
+        <div class="row">
+          <span id="auth-dot" class="dot" title="gate verdict"></span>
+          <span id="auth-text" style="color: var(--muted)">checking…</span>
+          <div class="kv" style="margin-left: auto;"><span>expires in</span><span id="auth-expires">—</span></div>
+        </div>
+        <p id="auth-detail" style="color: var(--muted); margin: 8px 0 0; font-size: 12px;"></p>
+      </section>
+
+      <section>
         <h2>Actions</h2>
         <button id="login-btn" type="button">🔓 Login</button>
         <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
@@ -147,6 +157,57 @@
         }
       }
 
+      // Ticket 10 — gate verdict for the auth pill. Runs alongside
+      // the engine tick so the user sees whether the persisted
+      // cookies are still good for `book()` to proceed.
+      async function authTick() {
+        const dot = $('auth-dot');
+        const text = $('auth-text');
+        const expiresEl = $('auth-expires');
+        const detailEl = $('auth-detail');
+        try {
+          const r = await fetch('/api/auth/status');
+          if (!r.ok) throw new Error('auth ' + r.status);
+          const g = await r.json();
+          if (g.pill === 'ok') {
+            dot.className = 'dot alive';
+            text.textContent = 'Authenticated';
+            text.style.color = 'var(--accent)';
+          } else if (g.pill === 'expiring') {
+            dot.className = 'dot warn';
+            text.textContent = 'Session expiring soon';
+            text.style.color = 'var(--warn)';
+          } else {
+            dot.className = 'dot err';
+            text.textContent = g.reason === 'expired'
+              ? 'Auth cookie expired'
+              : g.reason === 'no_phase1'
+                ? 'Phase-1 cookie missing'
+                : 'Login required';
+            text.style.color = 'var(--err)';
+          }
+          if (g.expiresInSec === null) {
+            expiresEl.textContent = 'session';
+          } else if (g.expiresInSec < 60) {
+            expiresEl.textContent = g.expiresInSec + 's';
+          } else if (g.expiresInSec < 3600) {
+            expiresEl.textContent = Math.floor(g.expiresInSec / 60) + 'm';
+          } else {
+            expiresEl.textContent = Math.floor(g.expiresInSec / 3600) + 'h';
+          }
+          const detailBits = [];
+          if (g.primary) detailBits.push('primary=' + g.primary);
+          detailBits.push('auth=' + g.authCount);
+          detailBits.push('phase1=' + g.phase1Count);
+          if (g.reason) detailBits.push('reason=' + g.reason);
+          detailEl.textContent = detailBits.join(' · ');
+        } catch (e) {
+          dot.className = 'dot err';
+          text.textContent = 'unreachable (' + e.message + ')';
+          text.style.color = 'var(--err)';
+        }
+      }
+
       // Login button — ticket 04 wires the real endpoint; for now
       // we 501, so just show the response text in the note.
       $('login-btn').addEventListener('click', async () => {
@@ -169,7 +230,9 @@
       });
 
       tick();
+      authTick();
       setInterval(tick, 2000);
+      setInterval(authTick, 2000);
     </script>
   </body>
 </html>

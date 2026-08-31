@@ -100,8 +100,17 @@ A TTM booking bot that can grab tickets faster than humanly possible
   auth cookies (ttkname / ttkemail / tixid). `gate()` returns
   `accept | no_auth | expired | no_phase1` so `book()` can refuse
   to open checkout before TTM redirects to signin. 20 unit tests
-  added; suite total 58/58 GREEN. UI wiring into the dashboard
-  status pill is the next concrete task.
+  added; suite total 58/58 GREEN.
+- [Wire ticket 10 — `book()` gate + dashboard pill](src/book.ts +
+  src/server.ts + ui/index.html): `book()` now consults `gate()`
+  before opening Playwright and returns a typed `BookResult` with
+  `step: 'gate'` plus the reason. 5 new unit tests cover the four
+  refusal cases (no_auth, expired, no_phase1, fresh-pass) and the
+  disk-cookie default. `src/server.ts` exposes
+  `GET /api/auth/status` returning `{ accept, reason, primary,
+  expiresInSec, pill, authCount, phase1Count }`. UI renders a
+  three-state pill (green = authenticated, yellow = expiring in
+  < 5 min, red = bad). Suite total now 63/63 GREEN.
 
 ## Not yet specified
 

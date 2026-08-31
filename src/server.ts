@@ -16,6 +16,8 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { config } from './config.js';
 import { BotEngine } from './bot-engine.js';
+import { loadCookies } from './cookies.js';
+import { gate } from './auth-cookies.js';
 
 // Single shared engine instance for the UI server's lifetime.
 const engine = new BotEngine();
@@ -96,6 +98,36 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === 'GET' && url.pathname === '/api/status') {
     json(res, 200, getStatus());
+    return;
+  }
+
+  // Ticket 10 — auth-cookie gate verdict for the dashboard pill.
+  if (req.method === 'GET' && url.pathname === '/api/auth/status') {
+    const cookies = loadCookies();
+    const verdict = gate(cookies);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expiresInSec =
+      Number.isFinite(verdict.summary.expiresAtSec) &&
+      verdict.summary.expiresAtSec !== Number.POSITIVE_INFINITY
+        ? Math.max(0, verdict.summary.expiresAtSec - nowSec)
+        : null;
+    // Three-state pill: ok (green), expiring (yellow < 5 min),
+    // bad (red). The status pill in ui/index.html maps these.
+    let pill: 'ok' | 'expiring' | 'bad';
+    if (verdict.accept) {
+      pill = expiresInSec !== null && expiresInSec < 300 ? 'expiring' : 'ok';
+    } else {
+      pill = 'bad';
+    }
+    json(res, 200, {
+      accept: verdict.accept,
+      reason: verdict.reason ?? null,
+      primary: verdict.primary?.name ?? null,
+      expiresInSec,
+      pill,
+      authCount: verdict.summary.all.length,
+      phase1Count: verdict.summary.phase1.length,
+    });
     return;
   }
 
