@@ -83,6 +83,17 @@ A TTM booking bot that can grab tickets faster than humanly possible
   recoverable. `payment` is intentionally the human-handoff step
   (`HumanStepRequired`) — captcha + 3-D Secure stay in the visible
   Firefox window. 11 unit tests passing; suite total 38/38 GREEN.
+- [Close ticket 09 — Phase-2 sensor recon](tickets/09/phase2-recon.md):
+  VERDICT — Phase-2 NOT deployed at any of the three probed TTM
+  endpoints (homepage, zones, view). Bodies are full HTML or a
+  71-byte meta-refresh to signin. Akamai `/akam/13/` is a 26 KB
+  lightweight resource with no `var a=…; var b=…; var c=…;`
+  payload generator. Implication: **no sensor wrapper needed**.
+  The real blocker for `watch.ts` to be useful end-to-end is auth
+  (`ttkname` cookie persistence), not Phase-2 telemetry. Live
+  probe artifacts (raw HTML + JS + probe-results.json) live under
+  `tickets/09/raw/` so the next session can re-probe after any
+  TTM-side change without re-deriving the URLs.
 
 ## Not yet specified
 

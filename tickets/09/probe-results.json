@@ -1,0 +1,197 @@
+[
+  {
+    "endpoint": "homepage",
+    "url": "https://www.thaiticketmajor.com/concert/idol1st-kenty-asia-tour-2026-in-bangkok.html",
+    "phase": "no-cookies",
+    "cookieNote": "cookie_file=1 cookies (0 real)",
+    "status": 200,
+    "bodyLen": 63029,
+    "setCookies": [
+      "HWWAFSESID=0b121afd3258923dbe",
+      "HWWAFSESTIME=1788157386947",
+      "PHPSESSID=68579192f1560b8e0671437e7aa056d3",
+      "ak_bmsc=E5A5906501299AA7B991A74D9FF12712~000000000000000000000000000000~YAAQnU3eF7SZqxagAQAAk3N8VgHOXj7MNujI9mW22M26UTGCnznF5PN5mbfDUByMu6YU8Poqx2pzuUdk8h3Uz61qAcnqfyz8WRhhKbrB6hAfLKCUZIouXk2yE8CmqXYDaIzOIgP4fLczJMruIrd0gNv+3t4oE5vqKiGz01bEnpCwdAeO/s3Ia2Htr/Qv2XtoPlokjaBFLEkvtGX+OXSf0acsdRCvbLB5Xk4hRLEnX6imMtcjuvfb4/pvHhE65Fs8S8aA1vfif97C17i4zvQ+O9GlxHaSEKDp6EAujuvqcshxoJPmK/Fmbyqa4NOCWdf4roYKIvGO7DfhTArWUNqHRTyrIY2ZzEUOiNL8qtePBP9QhdufGplWt0FvsrVB",
+      "bm_mi=2138987011461E24BFA0C02E59EEAF10~YAAQnU3eF7WZqxagAQAAk3N8VgGePhj+DnsRUkgPSBMGIncJiNMnNe34/2x3/nTc4uvML5PsKSGQkfMO3ytLWbTb3QfrM3DM/koZ3QV4mle8RGWxHWe43aFFv38m1icYyAzU1AnDh0acdWiu0/aiS31WIOjo2yZiprD27KnYVm+LP4HgJ8cuEk5OIrZwyyI/zWgoqAP5QqQnskZWGG0sUjPLTiZfAm6Y5TIQv0yoUU/DvUHsSB4NDUcKcjWPoVmQs4k0HmJd2BLBIvX9w2KbePatDckPK+RUVHfDHIPB2Ttr+mS1Ok3wKl937KQ63XkAm7T5mK2WYr+CwUPhftGUvWNH42UOdk6Z0EBAYoca00Ro62v5IXiHNrrCdBvj6KY2XkN4PTc6pHEhX54RyzTOzqJ0~1"
+    ],
+    "markers": {
+      "sensor_data": 0,
+      "_abck": 0,
+      "bm_sz": 0,
+      "bm_mi": 0,
+      "akamai": 0,
+      "edgesuite": 0,
+      "akam": 2,
+      "pwhr": 0
+    },
+    "varChunks": [
+      {
+        "var": "f",
+        "len": 80,
+        "sample": "d.getElementsByTagName(s)[0],\r\nj=d.createElement(s),dl=l!='dataLayer'?'&l='+l:''"
+      }
+    ],
+    "scriptSrcs": [],
+    "rawFile": "raw\\homepage-no-cookies.html",
+    "error": null
+  },
+  {
+    "endpoint": "homepage",
+    "url": "https://www.thaiticketmajor.com/concert/idol1st-kenty-asia-tour-2026-in-bangkok.html",
+    "phase": "with-cookies",
+    "cookieNote": "cookie_file=1 cookies (0 real)",
+    "status": 200,
+    "bodyLen": 63029,
+    "setCookies": [
+      "HWWAFSESID=176b773581d67e317c",
+      "HWWAFSESTIME=1788157392133",
+      "ak_bmsc=02FDB7C47DCF5CE5BAF107584091BB02~000000000000000000000000000000~YAAQr03eF/aAsB2gAQAAYXV8VgGTKGW/cwE+1lG+YnaOM9CwgOp8wHKdesZ4zavjug6J67FX1Jp4FYLCgQd1QDXsMWFLqLcCAsVUdT6pNVPTCmFx1mVBs74j0IuH2bDKPQ7v5GyCJmhClkjMze2kVOAKjKxOuOe4roZVS44YiMV5sOzO2bqph5GzOttJsK8VZCJjiHAydUJcZp3WSSwpODaLhlIFvNbGbiGeyAQDzKwmhGOnqnSTf6HY4LoR1c/0T0KlcchsWOQsG1YbOdE4wR8/rxn5APJZ+VthcZWqjTnh6M/WQwOe6dNl350bnmnIsHS1Ft5S3IgQuXR+hHQFlpUQEk/iQyYhjBfJgzfdy7tvHx75FOu+JcUq0x6g",
+      "bm_mi=EC2AD1936509A2101264D8258D74FD03~YAAQr03eF/eAsB2gAQAAYXV8VgEfGwo7sICFMUeChORpacWlcPCOHxSbCnZLwDdvq+E8wPeQhFIr1fgun2juHr6xuMFCKKnZx1px3iT++qN9rECsK7z8EpBFk/ijScb0vmr8wz8ukin0NsGufrnLQ4D5ft27fGsEY8kA9azmtqauHrxSpAWcqo28jqbwJbBgTmknPTN0iIZFTRiBz5yZ9/8BoYROjnx33xH+yV7QY6bdFEyDqI4HIVWki8uCdK1qsykImXnQwtDgL/Hmr1y2nIi9ipy7UtRWH0s0IkG8bj3kY35D2giiKtowaCEYcsypecMA2RYRYK8cfBRNSNeEQCyU51tGYgeP637LgMxuQZxi6CdWNGDAP5+RWRzVF1fWrQB19LK4VLSDX3PG5POnZc1+~1"
+    ],
+    "markers": {
+      "sensor_data": 0,
+      "_abck": 0,
+      "bm_sz": 0,
+      "bm_mi": 0,
+      "akamai": 0,
+      "edgesuite": 0,
+      "akam": 2,
+      "pwhr": 0
+    },
+    "varChunks": [
+      {
+        "var": "f",
+        "len": 80,
+        "sample": "d.getElementsByTagName(s)[0],\r\nj=d.createElement(s),dl=l!='dataLayer'?'&l='+l:''"
+      }
+    ],
+    "scriptSrcs": [],
+    "rawFile": "raw\\homepage-with-cookies.html",
+    "error": null
+  },
+  {
+    "endpoint": "zones",
+    "url": "https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504",
+    "phase": "no-cookies",
+    "cookieNote": "cookie_file=1 cookies (0 real)",
+    "status": 200,
+    "bodyLen": 71,
+    "setCookies": [
+      "HWWAFSESID=6cb4b73beaab8ef96f",
+      "HWWAFSESTIME=1788157396636",
+      "HWWAFSESID=e561b7ca9d12a45397",
+      "HWWAFSESTIME=1788157394598",
+      "PHPSESSID=3584c6f93e959acab1ebf527f2e85f7a"
+    ],
+    "markers": {
+      "sensor_data": 0,
+      "_abck": 0,
+      "bm_sz": 0,
+      "bm_mi": 0,
+      "akamai": 0,
+      "edgesuite": 0,
+      "akam": 0,
+      "pwhr": 0
+    },
+    "varChunks": [],
+    "scriptSrcs": [],
+    "rawFile": "raw\\zones-no-cookies.html",
+    "error": null
+  },
+  {
+    "endpoint": "zones",
+    "url": "https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504",
+    "phase": "with-cookies",
+    "cookieNote": "cookie_file=1 cookies (0 real)",
+    "status": 200,
+    "bodyLen": 71,
+    "setCookies": [
+      "HWWAFSESID=6cb4b76beaab8ef96f",
+      "HWWAFSESTIME=1788157396636",
+      "HWWAFSESID=eb6717f817019a5a02",
+      "HWWAFSESTIME=1788157392714"
+    ],
+    "markers": {
+      "sensor_data": 0,
+      "_abck": 0,
+      "bm_sz": 0,
+      "bm_mi": 0,
+      "akamai": 0,
+      "edgesuite": 0,
+      "akam": 0,
+      "pwhr": 0
+    },
+    "varChunks": [],
+    "scriptSrcs": [],
+    "rawFile": "raw\\zones-with-cookies.html",
+    "error": null
+  },
+  {
+    "endpoint": "view",
+    "url": "https://booking.thaiticketmajor.com/booking/3m/view.php?query=504",
+    "phase": "no-cookies",
+    "cookieNote": "cookie_file=1 cookies (0 real)",
+    "status": 404,
+    "bodyLen": 40211,
+    "setCookies": [
+      "HWWAFSESID=6cb4b79beaab8ef96f",
+      "HWWAFSESTIME=1788157396636",
+      "HWWAFSESID=9185779b7984a0760f",
+      "HWWAFSESTIME=1788157396017",
+      "PHPSESSID=29c4ad2cd86ba1499a5b12e1335a294d"
+    ],
+    "markers": {
+      "sensor_data": 0,
+      "_abck": 0,
+      "bm_sz": 0,
+      "bm_mi": 0,
+      "akamai": 0,
+      "edgesuite": 0,
+      "akam": 0,
+      "pwhr": 0
+    },
+    "varChunks": [
+      {
+        "var": "f",
+        "len": 80,
+        "sample": "d.getElementsByTagName(s)[0],\r\nj=d.createElement(s),dl=l!='dataLayer'?'&l='+l:''"
+      }
+    ],
+    "scriptSrcs": [],
+    "rawFile": "raw\\view-no-cookies.html",
+    "error": null
+  },
+  {
+    "endpoint": "view",
+    "url": "https://booking.thaiticketmajor.com/booking/3m/view.php?query=504",
+    "phase": "with-cookies",
+    "cookieNote": "cookie_file=1 cookies (0 real)",
+    "status": 404,
+    "bodyLen": 41398,
+    "setCookies": [
+      "HWWAFSESID=6cb4b7cbeaab8ef96f",
+      "HWWAFSESTIME=1788157396636",
+      "HWWAFSESID=7b5687f26b9b14b4a1",
+      "HWWAFSESTIME=1788157394754"
+    ],
+    "markers": {
+      "sensor_data": 0,
+      "_abck": 0,
+      "bm_sz": 0,
+      "bm_mi": 0,
+      "akamai": 0,
+      "edgesuite": 0,
+      "akam": 0,
+      "pwhr": 0
+    },
+    "varChunks": [
+      {
+        "var": "f",
+        "len": 80,
+        "sample": "d.getElementsByTagName(s)[0],\r\nj=d.createElement(s),dl=l!='dataLayer'?'&l='+l:''"
+      }
+    ],
+    "scriptSrcs": [],
+    "rawFile": "raw\\view-with-cookies.html",
+    "error": null
+  }
+]
