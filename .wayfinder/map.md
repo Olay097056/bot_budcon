@@ -114,10 +114,10 @@ A TTM booking bot that can grab tickets faster than humanly possible
 
 ## Next session (open)
 
-- [Ticket 11 — Auto re-login](.wayfinder/tickets/11-auto-relogin.md):
-  when the auth-cookie gate pill goes red, run `LoginFlow.run()`
-  once and re-consult `gate()` before refusing. ~40 LOC + 3 tests.
-  Spec written; no code yet.
+- _None — ticket 11 (auto re-login) shipped in this session._
+  The next concrete follow-up is multi-event support (V4 architecture)
+  and end-to-end purchase in a real browser, both of which need a
+  fresh human session with a real `ttkname` to validate.
 
 ## Not yet specified
 

@@ -98,6 +98,7 @@
       <section>
         <h2>Actions</h2>
         <button id="login-btn" type="button">🔓 Login</button>
+        <button id="relogin-btn" type="button" class="secondary" disabled>🔁 Re-login</button>
         <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
         <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
         <p id="action-note" style="color: var(--muted); margin: 8px 0 0;"></p>
@@ -148,6 +149,17 @@
           $('watch-btn').disabled  = !s.loggedIn || s.watchActive;
           $('stop-btn').disabled   = !s.watchActive;
 
+          // Ticket 11 — enable the Re-login button when the gate is bad
+          // and disable it while a re-login is in progress.
+          const relogin = g.lastRelogin;
+          if (relogin && relogin.lastResult === 'in_progress') {
+            $('relogin-btn').disabled = true;
+          } else if (!g.accept) {
+            $('relogin-btn').disabled = false;
+          } else {
+            $('relogin-btn').disabled = true;
+          }
+
           const log = $('log');
           log.textContent = (s.lastLog || []).slice(-50).join('\n');
           log.scrollTop = log.scrollHeight;
@@ -176,6 +188,10 @@
           } else if (g.pill === 'expiring') {
             dot.className = 'dot warn';
             text.textContent = 'Session expiring soon';
+            text.style.color = 'var(--warn)';
+          } else if (g.lastRelogin && g.lastRelogin.lastResult === 'in_progress') {
+            dot.className = 'dot warn';
+            text.textContent = 'Re-logging in…';
             text.style.color = 'var(--warn)';
           } else {
             dot.className = 'dot err';
@@ -218,6 +234,32 @@
           $('action-note').textContent = r.ok ? 'login started' : ('login: ' + r.status + ' ' + body);
         } catch (e) {
           $('action-note').textContent = 'login error: ' + e.message;
+        }
+      });
+
+      // Ticket 11 — Re-login button. Only enabled when the gate
+      // pill is red; clicking it POSTs to /api/auth/relogin and
+      // the auth tick polls the result back into the pill.
+      $('relogin-btn').addEventListener('click', async () => {
+        $('relogin-btn').disabled = true;
+        $('action-note').textContent = 're-login in progress…';
+        try {
+          const r = await fetch('/api/auth/relogin', { method: 'POST' });
+          const body = await r.json();
+          if (body.lastResult === 'ok') {
+            $('action-note').textContent = 're-login succeeded';
+          } else if (body.lastResult === 'in_progress') {
+            $('action-note').textContent = 're-login already in progress';
+          } else if (body.lastResult === 'backoff') {
+            $('action-note').textContent = 're-login skipped — inside back-off window';
+          } else {
+            $('action-note').textContent = 're-login did not refresh auth — complete the captcha manually';
+          }
+        } catch (e) {
+          $('action-note').textContent = 're-login error: ' + e.message;
+        } finally {
+          $('relogin-btn').disabled = false;
+          authTick();
         }
       });
 

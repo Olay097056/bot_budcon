@@ -18,11 +18,18 @@ import { config } from './config.js';
 import { BotEngine } from './bot-engine.js';
 import { loadCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
+import { maybeRelogin, type AutoReloginState } from './auto-relogin.js';
 
 // Single shared engine instance for the UI server's lifetime.
 const engine = new BotEngine();
 
 const UI_DIR = resolve('ui');
+
+/** Last re-login state (ticket 11). Updated by /api/auth/relogin. */
+let lastRelogin: AutoReloginState = {
+  lastResult: 'no_need',
+  lastAttemptAtMs: 0,
+};
 
 /** Reply with JSON. */
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -101,6 +108,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  // Ticket 11 — manually trigger an auto re-login attempt. The
+  // button on the dashboard is labelled "🔁 Re-login" and posts
+  // here when the gate pill is red.
+  if (req.method === 'POST' && url.pathname === '/api/auth/relogin') {
+    log('relogin requested');
+    try {
+      lastRelogin = await maybeRelogin();
+      json(res, 200, lastRelogin);
+    } catch (e) {
+      log(`relogin error: ${e instanceof Error ? e.message : String(e)}`);
+      json(res, 500, { lastResult: 'expired', lastAttemptAtMs: 0, reason: 'no_phase1' });
+    }
+    return;
+  }
+
   // Ticket 10 — auth-cookie gate verdict for the dashboard pill.
   if (req.method === 'GET' && url.pathname === '/api/auth/status') {
     const cookies = loadCookies();
@@ -127,6 +149,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       pill,
       authCount: verdict.summary.all.length,
       phase1Count: verdict.summary.phase1.length,
+      lastRelogin,
     });
     return;
   }

@@ -1,7 +1,7 @@
-# Ticket 11 — Auto re-login (next session)
+# Ticket 11 — Auto re-login
 
 **Type**: task
-**Status**: open · unblocked by 10 (auth gate wired)
+**Status**: SHIPPED · commit `pending` (this PR)
 **Label**: `wayfinder:task`
 
 ## Question
