@@ -134,10 +134,14 @@ export class LoginFlow {
 
 /** Public factory used by the UI server. */
 export async function startLogin(opts: LoginOptions = {}): Promise<boolean> {
-  // Ticket 12 — prefer the invisible_playwright bridge when the
-  // environment is set. The Python script spawns a C++-patched
-  // Firefox 151 that clears Akamai's bot-detection layer.
-  if (process.env['BOT_BUDCON_LOGIN_DRIVER'] === 'invisible') {
+  // Ticket 12 — invisible driver is the default. The Python
+  // script spawns a C++-patched Firefox 151 that clears
+  // Akamai's bot-detection layer; the human completes the
+  // captcha in the invisible window. Set
+  // BOT_BUDCON_LOGIN_DRIVER=playwright to fall back to the
+  // original Playwright persistent Firefox path (useful for
+  // debugging or if the Python bridge stops working).
+  if (process.env['BOT_BUDCON_LOGIN_DRIVER'] !== 'playwright') {
     return startLoginInvisible();
   }
   const engine = new BotEngine();
@@ -159,8 +163,11 @@ export async function startLoginInvisible(
 ): Promise<boolean> {
   const { spawn } = await import('node:child_process');
   const { dirname, resolve } = await import('node:path');
+  // import.meta.url points at compiled src/login.js, so its
+  // dirname is `<repo>/src`. The Python bridge lives in
+  // `<repo>/src/python/invisible_browser.py`.
   const here = dirname(fileURLToPath(import.meta.url));
-  const script = resolve(here, '..', 'python', 'invisible_browser.py');
+  const script = resolve(here, 'python', 'invisible_browser.py');
   const child = spawn('python', [script], { stdio: ['ignore', 'pipe', 'pipe'] });
   return await new Promise<boolean>((resolvePromise) => {
     let resolved = false;
