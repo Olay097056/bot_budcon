@@ -24,13 +24,18 @@
 |     | e2e integration smoke (gate->watch->book)    | shipped   | `0c5c4bb` |
 | 12  | invisible Playwright login (bypass + bridge) | shipped   | `61ce19b` |
 | 13  | Go cleanup (~2 GB reclaim)                   | closed    | `23d97e7` |
+| 12B | on-sale probe + 5 events verified            | closed    | `c7231f6` |
+| 14  | live login runbook (HANDOFF)                 | shipped   | `pending` |
 
 ## Next session (open)
 
-- _None — session shipped clean._
-  Next concrete follow-up is a real login run (human at the
-  keyboard for captcha + payment, then a real TTM event zone
-  on-sale) — both gated on conditions outside this session.
+- [Ticket 14 — Live login runbook](.wayfinder/tickets/14-live-verify.md):
+  the human at the keyboard completes one captcha at the
+  TTM signin page; the Python invisible bridge picks up
+  the resulting cookies and `~/.bot-budcon-data/cookies.json`
+  is populated. Once that lands, `book()` + watch loop work
+  end-to-end without further human input until a cookie
+  expiry (auto re-login handles that).
 
 ## What works end-to-end (today)
 

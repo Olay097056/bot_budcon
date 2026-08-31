@@ -123,6 +123,9 @@ A TTM booking bot that can grab tickets faster than humanly possible
   (deleted `C:\:\Program Files\Go` (259 MB) and
   `$HOME\go` (500 MB) — verified post-cleanup disk free
   increased by ~2 GB. Wre source tree was already gone.
+- [Ticket 14 — Live login runbook](.wayfinder/tickets/14-live-verify.md):
+  HANDOFF section + dedicated ticket spec, ready for the
+  next human at the keyboard to run the captcha flow.
 
 ## Not yet specified
 
