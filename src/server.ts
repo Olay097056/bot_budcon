@@ -19,6 +19,7 @@ import { BotEngine } from './bot-engine.js';
 import { loadCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
 import { maybeRelogin, type AutoReloginState } from './auto-relogin.js';
+import { startLogin } from './login.js';
 
 // Single shared engine instance for the UI server's lifetime.
 const engine = new BotEngine();
@@ -30,6 +31,11 @@ let lastRelogin: AutoReloginState = {
   lastResult: 'no_need',
   lastAttemptAtMs: 0,
 };
+
+/** Login-flow state (ticket 04). Single-flight: only one
+ *  startLogin() at a time. New POST /api/login/start while a
+ *  flow is in progress returns the in-flight promise. */
+let loginInFlight: Promise<boolean> | null = null;
 
 /** Reply with JSON. */
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -154,14 +160,42 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
-  // Stub endpoints — return a clear "not implemented" until the
-  // corresponding tickets close.
+  // Ticket 04 — login flow. Spawn Playwright Firefox in the
+  // background, navigate to the root sign-in URL, poll for
+  // cookies (PHPSESSID + ttkname). The human completes the
+  // captcha in the visible Firefox window.
   if (req.method === 'POST' && url.pathname === '/api/login/start') {
-    text(res, 501, 'login flow not implemented — see wayfinder ticket 04');
+    log('login requested');
+    if (loginInFlight) {
+      // Single-flight: a previous login is already running.
+      log('login already in progress — attaching to existing promise');
+      void loginInFlight.then((ok) =>
+        json(res, 200, { phase: 'already_in_progress', loggedIn: ok }),
+      );
+      return;
+    }
+    loginInFlight = (async () => {
+      try {
+        return await startLogin();
+      } finally {
+        loginInFlight = null;
+      }
+    })();
+    void loginInFlight
+      .then((ok) => log(`login finished: ok=${ok}`))
+      .catch((e: unknown) =>
+        log(`login error: ${e instanceof Error ? e.message : String(e)}`),
+      );
+    json(res, 202, { phase: 'started', loggedIn: false });
     return;
   }
   if (req.method === 'GET' && url.pathname === '/api/login/status') {
-    json(res, 200, { phase: 'idle', loggedIn: false });
+    const verdict = gate(loadCookies());
+    json(res, 200, {
+      phase: verdict.accept ? 'logged_in' : 'awaiting_login',
+      loggedIn: verdict.accept,
+      inProgress: loginInFlight !== null,
+    });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/cmd') {
