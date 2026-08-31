@@ -1,31 +1,34 @@
 # bot_budcon — final session summary
 
-**Status**: closed at commit `e0b8bec` + final docs commit (this file).
+**Status**: closed at commit `0c5c4bb` + final docs commit (the one that adds tickets 12/13).
 **Repository**: https://github.com/Olay097056/bot_budcon
-**Tests**: 63/63 vitest passing.
+**Tests**: 73/73 vitest passing.
 **HANDOFF.md**: this file is the canonical handoff for next session.
 
 ## Shipped this session (wayfinder tickets)
 
-| #   | Ticket                                  | Status    | Commit |
-|-----|-----------------------------------------|-----------|--------|
-| 01  | project scaffold                        | closed    | `7842543` |
-| 02  | bot engine base (wreq-js TLS bypass)    | closed    | `e88687d` |
-| 03  | TTM site recon                          | closed    | —      |
-| 04  | login flow (cookies module)              | closed    | `0a6b879` |
-| 05  | watch loop (zone parser + poll)         | closed    | `c0f45ca` |
-| 06  | UI shell                                | closed    | `1947ebd` |
-| 07  | WAF bypass strategy                     | closed    | —      |
-| 07B | GitHub bypass deep-scan                 | closed    | —      |
-| 08  | book flow (six-step purchase)           | claimed   | `4d623f7` |
-| 09  | Phase-2 sensor recon                    | closed    | `adcd58f` |
-| 10  | auth-cookie persistence + UI gate pill  | closed    | `e0b8bec` |
+| #   | Ticket                                       | Status    | Commit |
+|-----|----------------------------------------------|-----------|--------|
+| 01  | project scaffold                             | closed    | `7842543` |
+| 02  | bot engine base (wreq-js TLS bypass)         | closed    | `e88687d` |
+| 03  | TTM site recon                               | closed    | —      |
+| 04  | login flow (cookies module)                  | closed    | `0a6b879` |
+| 05  | watch loop (zone parser + poll)              | closed    | `c0f45ca` |
+| 06  | UI shell                                     | closed    | `1947ebd` |
+| 07  | WAF bypass strategy                          | closed    | —      |
+| 07B | GitHub bypass deep-scan                      | closed    | —      |
+| 08  | book flow (six-step purchase)                | claimed   | `4d623f7` |
+| 09  | Phase-2 sensor recon (verdict: NOT deployed) | closed    | `adcd58f` |
+| 10  | auth-cookie persistence + UI gate pill      | closed    | `e0b8bec` |
+| 11  | auto re-login (single-flight + 60s back-off) | closed    | `6eb0b8b` |
+|     | e2e integration smoke (gate->watch->book)    | shipped   | `0c5c4bb` |
 
 ## Next session (open)
 
-| #   | Ticket                       | Status |
-|-----|------------------------------|--------|
-| 11  | auto re-login (60 s back-off)| open   |
+| #   | Ticket                          | Status |
+|-----|---------------------------------|--------|
+| 12  | Real end-to-end purchase        | open   |
+| 13  | Go cleanup (~1 GB reclaim)      | open   |
 
 ## What works end-to-end (today)
 
@@ -47,38 +50,57 @@
   `payment` deliberately pauses for the human (captcha + 3-D
   Secure).
 - **Auth gate UI**: `GET /api/auth/status` returns the gate's
-  pill state. Dashboard renders a three-state pill that polls
-  every 2 s.
+  pill state. Dashboard renders a three-state pill (green /
+  yellow < 5 min / red) and now a fourth "Re-logging in…"
+  state during a single-flight attempt.
+- **Auto re-login**: `POST /api/auth/relogin` triggers
+  `maybeRelogin()` which runs `LoginFlow.run()` once and
+  re-consults the gate. Two safety properties: single-flight
+  (concurrent callers attach to the in-flight promise, not
+  spawn a second browser window) and 60 s back-off (a
+  transient captcha failure does not burn the user's captcha
+  attempts).
+- **Integration smoke**: `npx tsx scripts/smoke-e2e.ts`
+  proves the gate → parser → watch → selectZone compose under
+  a mock fetcher. Output:
+  ```
+  [smoke] gate verdict: accept=true reason=— primary=ttkname
+  [smoke] parser baseline: A1, A2
+  [smoke] watch events: B7
+  [smoke] OK — gate, parser, watch wired correctly end-to-end
+  ```
 
 ## What is NOT done (honest gaps)
 
-- ❌ **Auto re-login** (ticket 11). When the pill goes red, the
-  human must click `🔓 Login` manually.
-- ❌ **End-to-end purchase**: never run in a real browser
-  session with a real `ttkname`. The book flow tests are
-  unit-level; the live phase is gated on a real session, which
-  we couldn't fully simulate in this session.
+- ❌ **Real end-to-end purchase** (ticket 12): never run in a
+  real browser with a real `ttkname`. Captcha + payment
+  require the human at the keyboard.
 - ❌ **Payment**: deliberately NOT automated. The `payment()`
   step leaves the form for the human to fill in the visible
   Firefox window.
+- ❌ **`/api/book/start` + `🎯 Book Now` UI button**: not wired
+  yet. The book flow exists and is unit-tested but the UI
+  doesn't expose it. Ticket 12 sub-task.
 - ❌ **Multi-event**: V4 architecture supports it; no UI yet.
 - ❌ **Notification webhooks**: no LINE/Discord integration.
 - ❌ **Cleanup**: Go install (~1 GB at `C:/Program Files/Go`
   and `~/go`) is still on disk. Reclaim by deleting those two
-  paths if you want the space back — not needed for the bot.
+  paths. Ticket 13.
 
 ## How to pick up next session
 
 1. `git clone https://github.com/Olay097056/bot_budcon.git`
    (or `cd` into the existing one).
 2. `cd bot_budcon && npm install && npx playwright install firefox`
-3. `npx vitest run` — expect 63/63 GREEN.
+3. `npx vitest run` — expect 73/73 GREEN.
 4. `npx tsx src/server.ts` — dashboard at `http://localhost:7890`.
    Click `🔓 Login` to do a real Firefox login, then `🎯 Watch`
    to start polling. The auth-cookie pill turns green once
    `ttkname` lands in `cookies.json`.
-5. **Ticket 11** (auto re-login) is the next concrete step.
-   Spec is in `.wayfinder/tickets/11-auto-relogin.md`.
+5. `npx tsx scripts/smoke-e2e.ts` — verify the gate + watch
+   composition still works on this checkout.
+6. Pick up **Ticket 12** (real e2e) or **Ticket 13** (Go
+   cleanup) per the user's choice.
 
 ## Honest state of bot_budcon
 
@@ -89,9 +111,12 @@
   `🎯 Watch` button yet.
 - ✅ Auth gate pill: wired and verified end-to-end (HTTP
   response confirmed clean state).
-- ❌ Auto re-login: deferred.
-- ❓ Book click-through in a real browser: never run end-to-end.
-  Captcha + 3-D Secure pause still require the human.
+- ✅ Auto re-login: single-flight + 60 s back-off, wired to
+  `🔁 Re-login` button and to `/api/auth/relogin` endpoint.
+- ✅ Integration smoke: real gate + parser + watch wired under
+  a mock fetcher; 73/73 vitest passing.
+- ❌ Real book click-through in a browser: never run end-to-end.
+- ❓ Captcha + 3-D Secure pause still require the human.
 
 ## What worked (lessons)
 
@@ -114,6 +139,10 @@
   shipped first as pure functions (20 tests, no UI). The wire
   step landed in the next commit. Splitting kept each step
   small enough to verify.
+- **Integration tests catch wiring bugs** that unit tests in
+  isolation miss. The e2e smoke caught `WatchEvent` carrying
+  the zone on `ev.zone.code` instead of `ev.code` — a bug the
+  unit-level watch test missed.
 
 ## What did not work
 
@@ -128,11 +157,15 @@
   twice. Wayfinder tickets help because each one is a single
   decision; the danger is when orchestrator proposes a
   follow-up ticket inside the same session without asking.
+- **Real end-to-end testing inside the same session**. We tried
+  to drive it once (Phase A follow-up); the orchestrator
+  rightly pointed out it requires the human at the keyboard for
+  captcha + payment. Ticket 12 makes that explicit.
 
 ## Out of scope (final)
 
 - Sensor wrapper for Phase-2 (Akamai Bot Manager). Confirmed
   not deployed at TTM as of session close.
-- Auto re-login in this session (deferred to ticket 11).
 - CAPTCHA / 3-D Secure automation (out of scope permanently).
 - Multi-account / multi-event rotation (V4 only, deferred).
+- Cookie encryption at rest.

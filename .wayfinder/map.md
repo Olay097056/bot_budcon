@@ -114,11 +114,14 @@ A TTM booking bot that can grab tickets faster than humanly possible
 
 ## Next session (open)
 
-- _None — ticket 11 (auto re-login) and the e2e integration
-  smoke shipped in this session._ The next concrete follow-up
-  is end-to-end purchase in a real browser with a real
-  `ttkname`, which needs the human at the keyboard for captcha
-  + payment.
+- [Ticket 12 — Real end-to-end purchase](.wayfinder/tickets/12-real-e2e.md):
+  operator runbook + `/api/book/start` endpoint + `🎯 Book Now`
+  button. Requires the human at the keyboard for captcha +
+  payment and a real TTM event zone to be on-sale.
+- [Ticket 13 — Go cleanup](.wayfinder/tickets/13-go-cleanup.md):
+  delete `C:\:\Program Files\Go` + `$HOME\go` + (optional)
+  `proofofbots-web-re-toolkit`. ~1 GB reclaim. The wre toolkit
+  was the wrong fit for TTM (ticket 09 closed it).
 
 ## Not yet specified
 
