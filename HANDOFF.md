@@ -1,120 +1,78 @@
-# bot_budcon — session handoff
+# bot_budcon — final session summary
 
-**Status**: shipped and pushed.
-**Repository**: https://github.com/Olay097056/bot_budcon
-**Last commit on `main`**: see `git log origin/main`.
+**Status**: closed at commit `4d623f7` + final docs commit (this file).
+**Repository**: https://github.com/Olay09756/bot_budcon
+**Tests**: 38/38 vitest passing.
+**HANDOFF.md**: this file replaces the previous handoff (see git log).
 
-## What this bot does
+## Shipped this session (wayfinder tickets)
 
-Polls a Thai Ticket Major zones page every few seconds and fires
-`book()` the moment a target round opens. Faster than a human by
-the polling interval, which is the whole point.
+| # | Ticket | Status |
+|---|---|---|
+| 01 | project scaffold | closed — `7842543` |
+| 02 | bot engine base | closed — `e88687d` |
+| 03 | TTM site recon | closed (research) — deliverable in `docs/recon/` + `tickets/07b/` |
+| 04 | login flow | closed — `0a6b879` |
+| 05 | watch loop | closed — `c0f45ca` |
+| 06 | UI shell | closed — `1947ebd` |
+| 07 | WAF bypass strategy | closed (research) |
+| 07B | GitHub bypass deep-scan | closed (research) — 26 repos analyzed |
+| 08 | book flow | claimed (code in `src/book.ts`) — spec open |
 
-## Tickets shipped
+## In flight
 
-| # | Ticket | Commit | What it does |
-|---|---|---|---|
-| 01 | project scaffold | `7842543` | Node + TypeScript + Playwright + Vite scaffold, env-driven config, `passWithNoTests`. |
-| 02 | bot engine base | `e88687d` | Two transports: wreq-js (TLS-impersonating) and Playwright persistent Firefox. |
-| 04 | login flow | `0a6b879` | Playwright persistent Firefox polls for PHPSESSID + user-id cookie, persists via `cookies.json`. |
-| 05 | watch loop | `c0f45ca` | Async generator polls zones page, fires on first new zone code that appears after baseline. |
-| 06 | UI shell | `1947ebd` | tsx-runnable HTTP server on port 7890 with dark-themed HTML dashboard. |
+| # | Ticket | Status |
+|---|---|---|
+| 09 | Phase-2 sensor recon | **research incomplete** — subagent dispatched, stopped per anti-pattern guard. The artifact directory exists but the verdict file was not written. |
 
-Tickets 03 (TTM site recon — research, deliverable lives in
-`docs/recon/`) and 07 / 07B (WAF bypass research) are closed in the
-Wayfinder map but did not result in source files. Their output is
-in `.wayfinder/tickets/03-…`, `tickets/07/`, and `tickets/07b/`.
+## Why this session ended now
 
-## Key findings
+User signaled scope-creep loop risk (timeout "ไม่เคยใช้งานจริง" + silent intervals 2-3 rounds). Per the lesson "หยุดเมื่อ sunk cost พอ", we close at this checkpoint rather than chase Phase-2 recon, even though it was already in flight.
 
-- **wreq-js** (`sqdshguy/wreq-js` on npm, v3.2.0) is the working
-  Akamai / edgesuite TLS-bypass transport. Node's default `fetch`
-  fails with 403 at the root domain; wreq-js ships Chrome 149
-  JA3 / JA4 / Akamai HTTP-2 byte-identical fingerprints and returns
-  200 OK + the `bm_mi` Phase-1 cookie.
-- **TTM is multi-WAF**: Akamai edgesuite on the root + booking
-  detail pages, Huawei Cloud WAF on the booking flow. The signin
-  page on `event.thaiticketmajor.com` returns an Akamai Bot Manager
-  interstitial to bots.
-- **bot-spawn Firefox can't verify `event.*` cert chain**. Use
-  the root domain (`www.thaiticketmajor.com/user/signin.php`)
-  for the login flow — same form, cert we trust.
-- **wre bypass was abandoned** mid-session: the
-  `proofofbots/web-re-toolkit` is sunk cost (~9–11 GB), and the
-  user-supplied alternative `jesterfoidchopped/akamai-v3-sensor`
-  ships as a Go library, not a CLI — wiring it would need a Go
-  wrapper (~50–100 LOC). Both deferred in the Wayfinder map's
-  "Out of scope" section.
-- **HTTP fetch works for Phase-1**, but the watch loop talks to
-  a page whose Phase-1 cookies come from a real Firefox login.
-  Use plain `fetch` with the on-disk cookies injected as a
-  `Cookie` header — wreq-js is overkill here.
+## How to pick up next session
 
-## Layout
+1. `git pull https://github.com/Olay097056/bot_budcon.git` (in a fresh clone or the existing one).
+2. `cd bot_budcon && npm install && npx playwright install firefox`
+3. **Phase-2 recon** is the next concrete step. Read
+   `.wayfinder/tickets/09-phase2-sensor-recon.md` for the spec.
+   Run the three sub-question probes (see ticket body). The
+   verdict determines whether a sensor wrapper lands.
+4. **Book flow** (ticket 08) is half-wired. The dashboard's
+   "🎯 Book Now" button needs to call `book({ code, quantity, ... })`
+   from `src/server.ts`. Currently 501s.
+5. The `wreq-js` TLS bypass is shipped and verified end-to-end.
+   Don't rebuild wre.
 
-```
-src/
-  bot-engine.ts       # wreq-js transport + Playwright persistent ctx
-  cookies.ts          # load/save + normalize + buildCookieHeader
-  login.ts            # LoginFlow class, polls for PHPSESSID
-  watch.ts            # watch() async generator, fires on new zones
-  zones.ts            # parseZones() regex extractor (3 patterns)
-  server.ts           # UI dashboard HTTP server (port 7890)
-  index.ts            # CLI entry, exports BotEngine
-  config.ts           # env-driven paths + port
-ui/
-  index.html          # single-file dashboard, no bundler
-.wayfinder/          # wayfinder map + tickets (decisions, not code)
-tickets/07, 07b/     # WAF bypass research artifacts
-docs/recon/          # TTM site recon artifacts
-scripts/             # smoke + probe scripts
-```
+## Honest state of bot_budcon
 
-## Run
+- ✅ Phase-1 (TLS + Akamai cookies): solved with `wreq-js`.
+- ✅ Login: Playwright persistent Firefox + `cookies.json`.
+- ✅ Watch loop: async generator polls zones, fires on new codes.
+- ❌ Book flow: code exists, UI not wired.
+- ❓ Phase-2 sensor: unknown — recon ticket open.
+- ❌ Book click-through in a real browser: captcha + 3-D Secure
+  pause still require the human.
 
-```bash
-npm install
-npx playwright install firefox
-npm test              # 27/27 vitest, takes ~750 ms
-npm run typecheck     # tsc --noEmit
-npm run smoke-bot-engine   # smoke test the wreq-js transport live
-npm run ui            # dashboard at http://localhost:7890
-```
+## What worked
 
-The dashboard's Login button currently 501s — wire `LoginFlow`
-into `/api/login/start` in ticket 06's next iteration (a one-line
-delegate). Watch button 501s for the same reason.
+- **Wayfinder**: ticket-by-ticket planning kept the engine room
+  manageable. The map is the single source of truth for what
+  shipped, what is open, and what is out of scope.
+- **Visible polling** in long-running background tasks. The
+  /tmp/install logs + tail-of-tee made Go install / wre build
+  debuggable when they failed.
+- **Honest deferral** of the Go wrapper for jesterfoidchopped.
+  That was a 1-2 hour scope creep that would have eaten a
+  whole session for unclear gain.
 
-## Tests
+## What did not work
 
-`npx vitest run` → 27 passed (bot-engine 3, cookies 11, server 3,
-watch 4, zones 6). No external services required.
-
-## Out of scope (deferred to a future session)
-
-- **jesterfoidchopped sensor** — Go library, no `main.go`. Need a
-  custom Go wrapper that imports `client.New(...)` and exposes a
-  CLI. Re-open only when TTM deploys a confirmed Phase-2 sensor
-  challenge (per ticket 03 recon, current TTM endpoints respond
-  with 200 OK + Akamai Phase-1 cookies — Phase-2 not seen yet).
-- **glizzykingdreko/akamai-v3-sensor-data-helper** — 8+ open
-  "doesn't work" issues, maintainer silent, sensor VM rotates
-  monthly. De-adopted.
-- **Book flow** — click through seat selection + payment + captcha.
-  The watch loop detects new availability; a future ticket wires
-  the click-through using Playwright Firefox (not wreq-js —
-  captcha requires a real browser session).
-- **TLS-only fallbacks** — if Akamai IP-blocks this machine's ASN
-  outright, the next step is WARP / Cloudflare edge, not wre.
-
-## Handoff to the next session
-
-1. `git clone https://github.com/Olay097056/bot_budcon && cd bot_budcon && npm install`
-2. `npx playwright install firefox`
-3. `npm run ui` and click Login. A real human completes the captcha
-   in the visible Firefox window.
-4. Once `cookies.json` has PHPSESSID + a user-id cookie, the watch
-   loop will fire on new zones.
-5. The book click-through is the next concrete ticket — start it
-   from `src/watch.ts`'s `WatchEvent` and the Playwright persistent
-   context already wired in `src/bot-engine.ts`.
+- **Timeout + `notify_on_complete`** as a silent-wait pattern.
+  User called this out: timeouts that don't actually re-poll are
+  indistinguishable from silence. Next session should prefer
+  short sleep loops that emit status messages over `notify`
+  one-shots.
+- **Scope-creep loops** (A → Z → A). User / orchestrator both
+  flagged this twice. Wayfinder tickets help because each one is
+  a single decision; the danger is when orchestrator proposes a
+  follow-up ticket inside the same session without asking.
