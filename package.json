@@ -1,0 +1,32 @@
+{
+  "name": "bot_budcon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TTM booking bot — polls zones and fires book() the moment a target opens.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "ui": "tsx src/server.ts",
+    "login": "tsx src/index.ts login",
+    "watch": "tsx src/index.ts watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

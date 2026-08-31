@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build / type-check output
+dist/
+
+# Playwright + Vitest artifacts
+test-results/
+playwright-report/
+.vitest/
+
+# Bot runtime state — never commit login cookies, profiles, or logs
+cookies.json
+cookies.json.bak.*
+.ttm-data/
+firefox-profile/
+book.log
+*.log
+
+# Local env / secrets
+.env
+.env.local
+*.local.json
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
