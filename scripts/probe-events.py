@@ -53,16 +53,27 @@ def main() -> int:
             url = f"https://www.thaiticketmajor.com/concert/{event_slug}.html"
             try:
                 resp = page.goto(url, timeout=30_000)
-                status = resp.status if resp else -1
+                # Playwright may return None for JS-driven
+                # navigation; the body check is the ground truth.
+                raw_status = resp.status if resp else -1
                 body = page.content()
+                # Heuristic: TTM loads the event page server-side,
+                # then JS hydrates. status=-1 + body_len > 5KB +
+                # btn-buynow present == on-sale + bypass.
+                on_sale = (
+                    "btn-buynow" in body
+                    and len(body) > 5000
+                    and ("sold-out" not in body and "sold out" not in body.lower())
+                )
                 results.append(
                     {
                         "key": key,
                         "url": url,
-                        "status": status,
+                        "status": raw_status,
                         "body_len": len(body),
                         "has_buy_now": "btn-buynow" in body,
                         "has_sold_out": "sold-out" in body or "sold out" in body.lower(),
+                        "on_sale": on_sale,
                     }
                 )
             except Exception as e:
