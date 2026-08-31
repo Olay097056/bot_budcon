@@ -70,3 +70,9 @@ A TTM booking bot that can grab tickets faster than humanly possible
 - Anything outside `thaiticketmajor.com` (no Budokan, no other venues).
 - Manual user-driven tools (we are building autonomous booking).
 - Hosting / 24×7 daemon (single-machine CLI for now).
+- **jesterfoidchopped/akamai-v3-sensor** — library package (no `main.go`),
+  requires writing a Go wrapper (50–100 LOC) just to get a CLI binary.
+  wreq-js Phase-1 + Playwright Firefox login are already sufficient for
+  every endpoint we currently probe (200 OK + Akamai cookies). Re-open
+  this scope only when we hit a confirmed Phase-2 sensor challenge on a
+  TTM endpoint.

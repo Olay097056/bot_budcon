@@ -11,6 +11,7 @@
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 
 function resolveDataDir(): string {
   if (process.env.BOT_BUDCON_DATA_DIR && process.env.BOT_BUDCON_DATA_DIR.trim() !== '') {
@@ -25,8 +26,15 @@ function resolveDataDir(): string {
   return join(process.cwd(), 'bot-budcon-data');
 }
 
+function ensureDataDir(dir: string): string {
+  // Side-effect: mkdir -p the data dir so cookies.json can be
+  // written without each caller worrying about existence.
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 export const config = {
-  dataDir: resolveDataDir(),
+  dataDir: ensureDataDir(resolveDataDir()),
   paths: {
     cookies: join(resolveDataDir(), 'cookies.json'),
     firefoxProfile: join(resolveDataDir(), 'firefox-profile'),
