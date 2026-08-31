@@ -114,10 +114,11 @@ A TTM booking bot that can grab tickets faster than humanly possible
 
 ## Next session (open)
 
-- _None — ticket 11 (auto re-login) shipped in this session._
-  The next concrete follow-up is multi-event support (V4 architecture)
-  and end-to-end purchase in a real browser, both of which need a
-  fresh human session with a real `ttkname` to validate.
+- _None — ticket 11 (auto re-login) and the e2e integration
+  smoke shipped in this session._ The next concrete follow-up
+  is end-to-end purchase in a real browser with a real
+  `ttkname`, which needs the human at the keyboard for captcha
+  + payment.
 
 ## Not yet specified
 
