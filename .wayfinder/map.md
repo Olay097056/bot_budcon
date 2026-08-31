@@ -46,6 +46,12 @@ A TTM booking bot that can grab tickets faster than humanly possible
   (63 052 B). 3/3 unit tests passing, typecheck clean. Go sensor sidecar
   deferred to ticket 04. Commit `e88687d` on local `main`, no remote
   configured.
+- [Close ticket 06 — UI shell](src/server.ts + ui/index.html):
+  tsx-runnable HTTP server on port 7890 with GET / (dashboard),
+  GET /api/status, and 501 stubs for login/watch. Single-file HTML
+  dashboard with dark theme, status dot, log pane, polls every 2 s.
+  No bundler / framework — server reads ui/index.html off disk.
+  6/6 vitest passing. Commit `1947ebd` on local `main`.
 
 ## Not yet specified
 
