@@ -257,15 +257,22 @@ describe('book() pre-flight gate (ticket 10)', () => {
   });
 
   it('defaults to reading cookies from disk when none provided', async () => {
-    // With no cookie file at the test path, the loader returns
-    // []. That triggers the no_auth branch — proves the wiring
-    // reads loadCookies() at call time.
-    const r = await book({
-      context: ctxStub(),
-      zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
-      code: 'A1',
-    });
-    expect(r.ok).toBe(false);
-    expect(r.step).toBe('gate');
+    // Hermetic: mock loadCookies to return [] so the test does
+    // not depend on the real ~/.bot-budcon-data/cookies.json
+    // (which after a live login contains a valid session and
+    // would make the gate pass).
+    const cookiesMod = await import('../src/cookies.js');
+    const spy = vi.spyOn(cookiesMod, 'loadCookies').mockReturnValue([]);
+    try {
+      const r = await book({
+        context: ctxStub(),
+        zonesUrl: 'https://booking.thaiticketmajor.com/zones?query=504',
+        code: 'A1',
+      });
+      expect(r.ok).toBe(false);
+      expect(r.step).toBe('gate');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
