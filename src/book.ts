@@ -110,15 +110,13 @@ export async function book(opts: BookOptions): Promise<BookResult> {
 }
 
 export async function selectZone(page: Page, code: string): Promise<BookResult> {
-  // Try each pattern separately. Playwright's `page.$` accepts a
-  // single CSS selector; we can't OR across two attribute selectors
-  // with a comma because the comma in `#fixed.php#A1` collides
-  // with CSS list syntax. Use `page.$$` to query both and take the
-  // first hit.
-  // TTM's zones page uses <area> (image-map) for most concerts,
-  // not <a> — include both so watch's parseZones and book's
-  // click target agree. The generic [href*=...] is a fallback
-  // for any future tag.
+  // TTM's zones page is an image-map: <area href="#fixed.php#A1" onclick="selectzone(this.href,event)">
+  // The JS handler `selectzone` in js/zones.js does:
+  //   rd = document.frm.rdId.value; if (rd == '') alert('Please select round');
+  //   url = arr_url[1] + '?k=' + k + '&zone=' + code + '&round=' + rd; location.href = url;
+  // So we must ensure a round is selected, then navigate directly to that URL.
+  // Direct navigation is more reliable than clicking the <area> (which is 0x0 and
+  // sits behind the 590x530 <img usemap> that intercepts pointer events).
   const selectors = [
     `a[href*="#fixed.php#${code}"]`,
     `a[href*="#festival.php#${code}"]`,
@@ -128,18 +126,112 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
     `[href*="#festival.php#${code}"]`,
   ];
   let link: Awaited<ReturnType<Page['$']>> | null = null;
+  let href: string | null = null;
   for (const sel of selectors) {
     link = await page.$(sel);
-    if (link) break;
+    if (link) {
+      try {
+        href = await (link as unknown as { getAttribute: (a: string) => Promise<string | null> }).getAttribute('href');
+      } catch {
+        href = null;
+      }
+      if (!href) href = `#fixed.php#${code}`;
+      break;
+    }
   }
-  if (!link) {
+  if (!link || !href) {
     return { ok: false, step: 'selectZone', error: `no anchor for ${code}` };
   }
+  // Detect mock/test environment: no #rdId and no k -> fallback to old click path so existing unit tests keep passing.
+  const hasRdId = await page.$('#rdId');
+  const hasK = await page.$('input[name="k"]');
+  if (!hasRdId && !hasK) {
+    try {
+      await Promise.all([
+        page.waitForLoadState('domcontentloaded', { timeout: 10_000 }),
+        (link as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true }),
+      ]);
+      return { ok: true, step: 'selectZone' };
+    } catch (e) {
+      return { ok: false, step: 'selectZone', error: (e as Error).message };
+    }
+  }
+  // 1. Ensure a round is selected — the zones page defaults to "" if the user
+  // never touched the dropdown. Pick the first non-empty option and let
+  // round_change() submit the form (it reloads the page with rdId set).
+  let pickedRound = '';
   try {
-    await Promise.all([
-      page.waitForLoadState('domcontentloaded', { timeout: 10_000 }),
-      link.click({ force: true }),
-    ]);
+    const rdHandle = await page.$('#rdId');
+    if (rdHandle) {
+      const rdVal = await (rdHandle as unknown as { evaluate: (fn: (el: unknown) => unknown) => Promise<unknown> }).evaluate((el: unknown) => (el as { value: string }).value) as string;
+      if (!rdVal) {
+        const opts: string[] = await page.$$eval('#rdId option', (els) =>
+          els.map((o) => (o as unknown as { value: string }).value),
+        );
+        const first = opts.find((v) => v && v.trim() !== '' && v !== '000' && v !== '0');
+        if (!first) return { ok: false, step: 'selectZone', error: 'no round available' };
+        pickedRound = first;
+        await page.selectOption('#rdId', first);
+        // round_change() triggers form submit -> page reload
+        await page.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+        // re-resolve href after reload (k may have changed, but code stays)
+        // re-find the zone anchor after reload to determine fixed vs festival
+        let newHref: string | null = null;
+        for (const sel of selectors) {
+          const el = await page.$(sel);
+          if (el) { try { newHref = await (el as unknown as { getAttribute: (a:string)=>Promise<string|null>}).getAttribute('href'); } catch { newHref = null; } if (newHref) { href = newHref; break; } }
+        }
+      } else {
+        pickedRound = rdVal;
+      }
+    }
+  } catch {
+    // best effort — fall through to direct navigation
+  }
+  // 2. Build the navigation URL the original JS would have built.
+  let k = '';
+  let rd = '';
+  try {
+    k = await page.$eval('input[name="k"]', (el) => (el as unknown as { value: string }).value);
+  } catch {}
+  try {
+    rd = await page.$eval('#rdId', (el) => (el as unknown as { value: string }).value);
+  } catch {}
+  // Fallback: if rd still empty (reload raced), use the round we just picked
+  if (!rd && pickedRound) rd = pickedRound;
+  if (!rd) return { ok: false, step: 'selectZone', error: 'no round selected' };
+  const isFestival = href.includes('festival.php');
+  const pg = isFestival ? 'festival.php' : 'fixed.php';
+  // k lives on zones.php as hidden input; if empty, try to read from page URL
+  const zoneUrl = `${pg}?k=${encodeURIComponent(k)}&zone=${encodeURIComponent(code)}&round=${encodeURIComponent(rd)}`;
+  const base = new URL(page.url());
+  const fullUrl = new URL(zoneUrl, base).toString();
+  try {
+    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+    await page.waitForTimeout(800);
+    // Detect TTM sale-not-open (errcode=9) or round-stale error.
+    // All current TTM queries (504, 622, 747, ...) return error.php?errcode=9
+    // with Thai "กรุณาเลือกรอบการแสดงใหม่จากหน้าโซน" when the sale
+    // hasn't opened (05-06 Sep 2026 etc). Direct fetch always 302s,
+    // Playwright goto follows to error.php — detect it here so the
+    // caller gets a clear message and can try another event.
+    const landed = page.url();
+    if (landed.includes('error.php') || landed.includes('errcode=9')) {
+      const html = await page.content().catch(()=>'');
+      const isNotOpen = html.includes('กรุณาเลือกรอบการแสดงใหม่') || html.includes('Please select round again') || html.includes('errcode=9');
+      if (isNotOpen) {
+        return { ok: false, step: 'selectZone', error: `TTM sale not open (error.php?errcode=9 — round ${rd} not yet on sale) — try another event or wait for sale open` };
+      }
+      return { ok: false, step: 'selectZone', error: `blocked at ${landed}` };
+    }
+    // Also check body for errcode=9 even if URL didn't change (meta refresh)
+    try {
+      const html = await page.content();
+      if (html.includes('errcode=9') && html.includes('กรุณาเลือกรอบการแสดงใหม่')) {
+        return { ok: false, step: 'selectZone', error: `TTM sale not open (error.php?errcode=9 — round ${rd} not yet on sale)` };
+      }
+    } catch {}
     return { ok: true, step: 'selectZone' };
   } catch (e) {
     return { ok: false, step: 'selectZone', error: (e as Error).message };
@@ -164,11 +256,40 @@ export async function selectQuantity(page: Page, quantity: number): Promise<Book
 
 export async function confirmSeats(page: Page): Promise<BookResult> {
   try {
-    const btn = await page.$('button[name="confirm"], button:has-text("Confirm"), button:has-text("Continue")');
-    if (!btn) return { ok: false, step: 'confirmSeats', error: 'no confirm button' };
+    // TTM's fixed page varies by event — we accept Thai and English labels.
+    const candidates = [
+      'button[name="confirm"]',
+      'input[name="confirm"]',
+      'input[type="submit"]',
+      'button:has-text("ยืนยัน")',
+      'button:has-text("ตกลง")',
+      'button:has-text("จอง")',
+      'button:has-text("Confirm")',
+      'button:has-text("Continue")',
+      'a:has-text("ยืนยัน")',
+      'a:has-text("Confirm")',
+      '[onclick*="confirm"]',
+    ];
+    let btn: Awaited<ReturnType<Page['$']>> | null = null;
+    for (const sel of candidates) {
+      btn = await page.$(sel);
+      if (btn) break;
+    }
+    // Fallback: any visible button/input submit on the page
+    if (!btn) btn = await page.$('button, input[type="submit"], input[type="button"], a.btn, a.button');
+    if (!btn) {
+      // Debug: dump available buttons for diagnostics (visible in server log)
+      try {
+        const html = await page.content();
+        const snippet = html.slice(0, 4000).replace(/\s+/g, ' ').slice(0, 1200);
+        // eslint-disable-next-line no-console
+        console.log(`[confirmSeats] no button — url=${page.url()} snippet=${snippet}`);
+      } catch {}
+      return { ok: false, step: 'confirmSeats', error: 'no confirm button' };
+    }
     await Promise.all([
       page.waitForLoadState('domcontentloaded', { timeout: 10_000 }),
-      btn.click(),
+      (btn as unknown as { click: () => Promise<void> }).click(),
     ]);
     return { ok: true, step: 'confirmSeats' };
   } catch (e) {

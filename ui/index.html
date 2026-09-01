@@ -21,7 +21,7 @@
         background: var(--bg);
         color: var(--fg);
       }
-      main { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+      main { max-width: 780px; margin: 24px auto; padding: 0 16px; }
       header { display: flex; align-items: baseline; gap: 12px; }
       h1 { font-size: 18px; margin: 0; }
       .dot {
@@ -50,6 +50,7 @@
       }
       button[disabled] { opacity: 0.5; cursor: not-allowed; }
       button.secondary { background: var(--border); color: var(--fg); }
+      button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
       select, input {
         background: #06080c;
         color: var(--fg);
@@ -70,10 +71,13 @@
         font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
         color: var(--muted);
       }
-      .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+      .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
       .row .kv { display: flex; flex-direction: column; }
       .row .kv span:first-child { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
       .row .kv span:last-child  { font: 13px ui-monospace, monospace; }
+      .pill { font: 11px ui-monospace, monospace; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+      .pill.ok { color: var(--accent); border-color: var(--accent); }
+      .pill.warn { color: var(--warn); border-color: var(--warn); }
     </style>
   </head>
   <body>
@@ -116,27 +120,44 @@
         <p id="watch-event" style="color: var(--accent); margin: 8px 0 0; font-size: 12px; font-weight: 600;"></p>
       </section>
 
+      <!-- Generic event discovery -->
+      <section>
+        <h2>Events — generic discovery (supports every TTM concert)</h2>
+        <div class="row" style="margin-bottom: 10px;">
+          <button id="discover-btn" type="button" class="ghost" title="Scrape concert/ and probe zones.php for every query">🔍 Discover events</button>
+          <span id="discover-meta" style="color: var(--muted); font-size: 12px;">—</span>
+          <span id="discover-pill" class="pill" style="display:none;"></span>
+        </div>
+        <div class="row" style="margin-bottom: 10px;">
+          <select id="target-select" title="Pick any TTM event — populated by Discover" style="min-width: 320px; max-width: 100%;">
+            <option value="idol1st">idol1st (504) — fallback</option>
+            <option value="lany">lany — fallback</option>
+            <option value="joji">joji — fallback</option>
+            <option value="babymonster">babymonster — fallback</option>
+            <option value="dreaming">dreaming — fallback</option>
+          </select>
+          <input id="custom-query" type="text" placeholder="custom query (e.g. 504 or 927)" style="width: 200px;" maxlength="32" />
+          <button id="preview-btn" type="button" class="ghost" title="Probe zones/rounds for the custom query without starting Watch">👁 Preview</button>
+        </div>
+        <div class="row" style="margin-bottom: 10px;">
+          <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
+          <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
+        </div>
+        <div id="event-preview" style="background:#06080c; border:1px solid var(--border); border-radius:6px; padding:10px 12px; font: 12px/1.5 ui-monospace, monospace; color: var(--muted); min-height: 44px; white-space: pre-wrap; word-break: break-word;">idle — hit 🔍 Discover to load all concert→query mappings, or paste a custom query and hit 👁 Preview.</div>
+        <p style="color: var(--muted); font-size: 11px; margin: 8px 0 0;">Discover ค้นทุก <code>zones.php?query=&lt;q&gt;</code> จากหน้า <code>/concert/</code> แล้ว probe <code>zones.php</code> ตัวจริง (ด้วย cookies) เพื่อโชว์โซน/รอบ/ <code>k</code> — จากนั้น <code>🎯 Watch</code> จะได้ baseline จริง และ <code>🎯 Book Now</code> จะพุ่งไป <code>fixed.php</code> ตรงๆ เพื่อหลีกเลี่ยง <code>errcode=9</code> ของอีเวนต์ที่ยังไม่เปิดขาย (เช่น 504 / 05-06 Sep 2026) โดยไม่ต้องพึ่ง hardcoded 5 รายชื่อ — รองรับทุกอีเวนต์ที่มีปุ่ม “ซื้อบัตร” บน TTM แล้ว</p>
+      </section>
+
       <section>
         <h2>Actions</h2>
         <div class="row" style="margin-bottom: 10px;">
           <button id="login-btn" type="button" title="Spawns an invisible (C++-patched) Firefox to bypass Akamai">🔓 Login (invisible)</button>
           <button id="relogin-btn" type="button" class="secondary" disabled>🔁 Re-login</button>
         </div>
-        <div class="row" style="margin-bottom: 10px;">
-          <select id="target-select" title="Pick TTM target (query)">
-            <option value="idol1st">idol1st (504)</option>
-            <option value="lany">lany</option>
-            <option value="joji">joji</option>
-            <option value="babymonster">babymonster</option>
-            <option value="dreaming">dreaming</option>
-          </select>
-          <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
-          <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
-        </div>
         <div class="row">
           <input id="book-code" type="text" placeholder="zone code (A1)" style="width: 120px;" maxlength="10" />
+          <input id="book-qty" type="number" min="1" max="6" value="1" style="width:72px;" title="qty" />
           <button id="book-btn" type="button" class="secondary" disabled>🎯 Book Now</button>
-          <span style="color: var(--muted); font-size: 11px;">manual — uses last watch event if blank</span>
+          <span style="color: var(--muted); font-size: 11px;">manual — uses last watch event if code blank</span>
         </div>
         <p id="action-note" style="color: var(--muted); margin: 8px 0 0;"></p>
       </section>
@@ -151,6 +172,73 @@
       const $ = (id) => document.getElementById(id);
       let lastAuth = null;
       let lastWatch = null;
+      /** @type {Array<{query:string,slug:string,title:string,zonesUrl:string,zones:string[],rounds:string[],k:string|null}>|null} */
+      let discovered = null;
+      let selectedEvent = null;
+
+      function zonesUrlForCurrentSelection() {
+        const custom = $('custom-query').value.trim();
+        if (custom) {
+          if (custom.startsWith('http')) return custom;
+          // bare query like "504" or "927"
+          if (/^[A-Za-z0-9_-]+$/.test(custom) && !custom.includes('?')) {
+            return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=' + encodeURIComponent(custom);
+          }
+          return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=' + encodeURIComponent(custom);
+        }
+        if (selectedEvent && selectedEvent.zonesUrl) return selectedEvent.zonesUrl;
+        const sel = $('target-select').value.trim();
+        if (!sel) return '';
+        if (sel.startsWith('http')) return sel;
+        // fallback config key → map to known fallback query
+        const fallbackMap = { idol1st:'504', lany:'927', joji:'joji', babymonster:'524', dreaming:'622' };
+        const q = fallbackMap[sel] ?? sel;
+        if (/^[A-Za-z0-9_-]+$/.test(q) && !q.includes('?')) {
+          return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=' + encodeURIComponent(q);
+        }
+        return sel;
+      }
+
+      function renderEventPreview() {
+        const el = $('event-preview');
+        const url = zonesUrlForCurrentSelection();
+        if (selectedEvent) {
+          const zones = selectedEvent.zones && selectedEvent.zones.length ? selectedEvent.zones.join(', ') : '(empty — event may have no zones yet or needs cookies)';
+          const rounds = selectedEvent.rounds && selectedEvent.rounds.length ? selectedEvent.rounds.join(', ') : '(none)';
+          el.textContent = `selected: ${selectedEvent.title}  [${selectedEvent.query}]`
+            + `\nslug: ${selectedEvent.slug || '—'}`
+            + `\nzonesUrl: ${selectedEvent.zonesUrl}`
+            + `\nzones (${(selectedEvent.zones||[]).length}): ${zones}`
+            + `\nrounds: ${rounds}`
+            + `\nk: ${selectedEvent.k || '—'}`
+            + `\n→ 🎯 Watch will baseline ${ (selectedEvent.zones||[]).length ? selectedEvent.zones.length : '?' } zones; 🎯 Book Now will round→fixed.php (avoid errcode=9 if this event is on-sale)`;
+          return;
+        }
+        if (url) {
+          el.textContent = `pending selection → zonesUrl: ${url}\nHit 👁 Preview to probe zones/rounds, or 🎯 Watch to baseline directly.`;
+          return;
+        }
+        el.textContent = 'idle — hit 🔍 Discover to load all concert→query mappings, or paste a custom query and hit 👁 Preview.';
+      }
+
+      function applyDiscoveredToSelect(events) {
+        const sel = $('target-select');
+        sel.innerHTML = '';
+        for (const ev of events) {
+          const opt = document.createElement('option');
+          opt.value = ev.zonesUrl;
+          const zc = ev.zones ? ev.zones.length : 0;
+          const rc = ev.rounds ? ev.rounds.length : 0;
+          const suffix = (zc === 0 && rc === 0) ? ' (empty — upcoming/needs round)' : ` — ${zc} zones · ${rc} rounds`;
+          opt.textContent = `${ev.title} [${ev.query}]${suffix}`;
+          sel.appendChild(opt);
+        }
+        if (events[0]) {
+          sel.value = events[0].zonesUrl;
+          selectedEvent = events[0];
+        }
+        renderEventPreview();
+      }
 
       async function tick() {
         try {
@@ -181,12 +269,10 @@
             label.textContent = s.loggedIn ? 'logged in' : 'idle';
           }
 
-          // Buttons — use lastAuth for relogin gate, s for loggedIn/watchActive
           const authOk = lastAuth ? lastAuth.accept : s.loggedIn;
           $('login-btn').disabled  = s.loggedIn || s.watchActive;
           $('watch-btn').disabled  = !s.loggedIn || s.watchActive;
           $('stop-btn').disabled   = !s.watchActive;
-          // Book enabled when watch has seen a zone OR user typed a code and we are logged in
           const hasZone = !!(lastWatch && lastWatch.lastEvent);
           const codeTyped = $('book-code').value.trim().length > 0;
           $('book-btn').disabled = !s.loggedIn || (!hasZone && !codeTyped);
@@ -298,7 +384,6 @@
           } else {
             eventEl.textContent = '';
           }
-          // Enable Book button if we have a lastEvent or typed code
           const s = { loggedIn: lastAuth ? lastAuth.accept : false, watchActive: w.active };
           const codeTyped = $('book-code').value.trim().length > 0;
           $('book-btn').disabled = !s.loggedIn || (!w.lastEvent && !codeTyped);
@@ -338,12 +423,89 @@
         }
       });
 
+      $('discover-btn').addEventListener('click', async () => {
+        const btn = $('discover-btn');
+        const meta = $('discover-meta');
+        const pill = $('discover-pill');
+        btn.disabled = true;
+        meta.textContent = 'discovering… (scrapes /concert/ then probes zones.php per query — ~20s)';
+        pill.style.display = 'none';
+        try {
+          const r = await fetch('/api/events/discover?limit=30');
+          const body = await r.json();
+          if (!r.ok) throw new Error(body.error || ('http ' + r.status));
+          discovered = body.events || [];
+          const warns = body.warnings || [];
+          meta.textContent = `found ${discovered.length} events from ${body.concertUrl} — ${discovered.filter(e=>e.zones&&e.zones.length).length} with zones · ${warns.length?('warnings: '+warns.slice(0,2).join(' | ')) : 'no warnings'}`;
+          pill.textContent = `${discovered.length} events · ${discovered.filter(e=>e.zones&&e.zones.length).length} with zones`;
+          pill.className = 'pill ok';
+          pill.style.display = '';
+          if (discovered.length) applyDiscoveredToSelect(discovered);
+          $('action-note').textContent = `discover ok — ${discovered.length} queries (e.g. ${discovered.slice(0,3).map(e=>e.query).join(', ')}) — pick one then 🎯 Watch`;
+        } catch (e) {
+          meta.textContent = 'discover failed: ' + e.message;
+          pill.textContent = 'error';
+          pill.className = 'pill warn';
+          pill.style.display = '';
+          $('action-note').textContent = 'discover error: ' + e.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      $('target-select').addEventListener('change', () => {
+        const v = $('target-select').value;
+        if (discovered) {
+          selectedEvent = discovered.find(e => e.zonesUrl === v) || null;
+        } else {
+          selectedEvent = null;
+        }
+        // typing in custom-query overrides select — clear it on change
+        // (keep custom as secondary; Watch prefers custom if non-empty)
+        renderEventPreview();
+        tick(); watchTick();
+      });
+      $('custom-query').addEventListener('input', () => {
+        if ($('custom-query').value.trim()) selectedEvent = null;
+        else if (discovered && $('target-select').value) {
+          selectedEvent = discovered.find(e => e.zonesUrl === $('target-select').value) || null;
+        }
+        renderEventPreview();
+        tick(); watchTick();
+      });
+
+      $('preview-btn').addEventListener('click', async () => {
+        const url = zonesUrlForCurrentSelection();
+        if (!url) { $('action-note').textContent = 'preview: no query/url'; return; }
+        $('action-note').textContent = 'previewing ' + url + '…';
+        $('preview-btn').disabled = true;
+        try {
+          const r = await fetch('/api/events/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+          const body = await r.json();
+          if (!r.ok) throw new Error(body.error || ('http ' + r.status));
+          const zones = body.zones && body.zones.length ? body.zones.join(', ') : '(empty)';
+          const rounds = body.rounds && body.rounds.length ? body.rounds.join(', ') : '(none)';
+          $('event-preview').textContent = `preview [${body.query || '—'}] → ${body.zonesUrl}\nstatus: ${body.status}  loginRedirect: ${body.loginRedirect}\nfinalUrl: ${body.finalUrl}\nzones (${(body.zones||[]).length}): ${zones}\nrounds: ${rounds}\nk: ${body.k || '—'}`
+            + (body.loginRedirect ? '\n⚠ zones redirected to signin — cookies missing/stale → Login first' : '');
+          if (body.zones && body.zones.length && !$('custom-query').value.trim() && !discovered) {
+            $('action-note').textContent = 'preview ok — ' + body.zones.length + ' zones (rounds: ' + rounds + ') — ready to Watch';
+          } else {
+            $('action-note').textContent = 'preview: ' + (body.zones||[]).length + ' zones';
+          }
+        } catch (e) {
+          $('action-note').textContent = 'preview error: ' + e.message;
+        } finally {
+          $('preview-btn').disabled = false;
+        }
+      });
+
       $('watch-btn').addEventListener('click', async () => {
-        const target = $('target-select').value;
-        $('action-note').textContent = 'starting watch for ' + target + '…';
+        const url = zonesUrlForCurrentSelection();
+        if (!url) { $('action-note').textContent = 'watch: pick an event or enter a custom query'; return; }
+        $('action-note').textContent = 'starting watch for ' + url + '…';
         $('watch-btn').disabled = true;
         try {
-          const r = await fetch('/api/watch/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ target }) });
+          const r = await fetch('/api/watch/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
           const body = await r.json();
           if (r.ok) $('action-note').textContent = 'watch started → ' + body.url;
           else if (r.status === 409) $('action-note').textContent = 'watch already active → ' + (body.url||'');
@@ -373,11 +535,14 @@
         let code = $('book-code').value.trim().toUpperCase();
         if (!code && lastWatch && lastWatch.lastEvent) code = lastWatch.lastEvent.code;
         if (!code) { $('action-note').textContent = 'book: need zone code'; return; }
-        const zonesUrl = lastWatch && lastWatch.url ? lastWatch.url : `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${$('target-select').value==='idol1st'?'504':$('target-select').value}`;
-        $('action-note').textContent = 'booking ' + code + '…';
+        const qtyRaw = $('book-qty').value;
+        const quantity = Math.max(1, Math.min(6, Number(qtyRaw) || 1));
+        const zonesUrl = (lastWatch && lastWatch.url) ? lastWatch.url : zonesUrlForCurrentSelection();
+        if (!zonesUrl) { $('action-note').textContent = 'book: need zonesUrl (Watch first or pick event)'; return; }
+        $('action-note').textContent = 'booking ' + code + ' ×' + quantity + '…';
         $('book-btn').disabled = true;
         try {
-          const r = await fetch('/api/book/start', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, zonesUrl, quantity: 1 }) });
+          const r = await fetch('/api/book/start', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, zonesUrl, quantity }) });
           const body = await r.json();
           if (body.humanStep) $('action-note').textContent = 'book paused at ' + body.step + ' — complete captcha/payment in Firefox';
           else if (body.ok) $('action-note').textContent = 'book ok: ' + JSON.stringify(body);
@@ -391,6 +556,7 @@
 
       $('book-code').addEventListener('input', () => { tick(); watchTick(); });
 
+      renderEventPreview();
       tick();
       authTick();
       watchTick();

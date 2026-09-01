@@ -87,11 +87,14 @@ describe('selectQuantity()', () => {
 });
 
 describe('confirmSeats()', () => {
-  it('clicks the confirm button', async () => {
+  it('clicks the confirm button (any candidate)', async () => {
     const btn = { click: vi.fn(async () => undefined) };
     const page = pageWithElement({
-      'button[name="confirm"], button:has-text("Confirm"), button:has-text("Continue")': btn,
+      'button[name="confirm"]': btn,
     });
+    // stub other deps
+    (page as unknown as Record<string, unknown>).content = vi.fn(async () => '<html>ok</html>');
+    (page as unknown as Record<string, unknown>).url = vi.fn(() => 'https://booking.thaiticketmajor.com/booking/3m/fixed.php');
     const r = await confirmSeats(page as never);
     expect(r.ok).toBe(true);
     expect(btn.click).toHaveBeenCalledOnce();
@@ -99,6 +102,8 @@ describe('confirmSeats()', () => {
 
   it('returns error when no confirm button exists', async () => {
     const page = pageWithElement({});
+    (page as unknown as Record<string, unknown>).content = vi.fn(async () => '<html>no btn</html>');
+    (page as unknown as Record<string, unknown>).url = vi.fn(() => 'https://booking.thaiticketmajor.com/booking/3m/fixed.php');
     const r = await confirmSeats(page as never);
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/no confirm button/);

@@ -22,6 +22,7 @@ import { maybeRelogin, type AutoReloginState } from './auto-relogin.js';
 import { startLogin } from './login.js';
 import { getWatchManager } from './watch-manager.js';
 import { book, HumanStepRequired } from './book.js';
+import { discoverEvents } from './discover.js';
 
 // Single shared engine instance for the UI server's lifetime.
 const engine = new BotEngine();
@@ -301,6 +302,67 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === 'POST' && url.pathname === '/api/cmd') {
     text(res, 501, 'cmd dispatch not implemented — see wayfinder ticket 05');
+    return;
+  }
+
+  // Generic event discovery — scrape concert/ + zones.php for every query.
+  // GET /api/events/discover?limit=30  → {concertUrl, events:[{query,slug,title,zonesUrl,zones,rounds,k}], warnings}
+  // No gate check: discover works unauthenticated (zones may redirect to signin without cookies — still returns the query).
+  if (req.method === 'GET' && url.pathname === '/api/events/discover') {
+    const limitRaw = url.searchParams.get('limit');
+    const limit = limitRaw ? Math.max(1, Math.min(50, Number(limitRaw) || 30)) : 30;
+    try {
+      const result = await discoverEvents({ limit });
+      json(res, 200, result);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log(`discover error: ${msg}`);
+      json(res, 500, { error: msg });
+    }
+    return;
+  }
+
+  // Preview a single zones.php — lightweight zones/rounds/k check for any query/url.
+  // POST /api/events/preview {query|url} → {query, zonesUrl, zones, rounds, k, warnings}
+  // Also gate-free; useful to probe a custom query before Watch/Book.
+  if (req.method === 'POST' && url.pathname === '/api/events/preview') {
+    const body = await readJsonBody(req);
+    let zonesUrl = typeof body['url'] === 'string' ? (body['url'] as string).trim() : '';
+    let query = typeof body['query'] === 'string' ? (body['query'] as string).trim() : '';
+    if (!zonesUrl && query) {
+      if (query.startsWith('http')) zonesUrl = query;
+      else zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(query)}`;
+    }
+    if (!zonesUrl) {
+      json(res, 400, { error: 'query or url required' });
+      return;
+    }
+    if (!zonesUrl.startsWith('http')) zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(zonesUrl)}`;
+    try {
+      const q = (() => { try { return new URL(zonesUrl!).searchParams.get('query') ?? ''; } catch { return ''; } })();
+      const { loadCookies: lc, buildCookieHeader: bch } = await import('./cookies.js');
+      const { parseZones: pz } = await import('./zones.js');
+      const { _internal: di } = await import('./discover.js');
+      const cookies = lc();
+      const host = new URL(zonesUrl!).host;
+      const ck = bch(cookies, host);
+      const r = await fetch(zonesUrl!, {
+        headers: {
+          ...(ck ? { Cookie: ck } : {}),
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+        },
+      });
+      const bodyText = await r.text();
+      const zones = r.status >= 200 && r.status < 300 ? pz(bodyText).map((z) => z.code) : [];
+      const rounds = r.status >= 200 && r.status < 300 ? (di as unknown as { parseRounds: (s: string) => string[] }).parseRounds(bodyText) : [];
+      const k = r.status >= 200 && r.status < 300 ? (di as unknown as { parseK: (s: string) => string | null }).parseK(bodyText) : null;
+      const isLoginRedirect = bodyText.length < 400 && /url=\s*\/?user\/signin\.php/i.test(bodyText);
+      json(res, 200, { query: q || query, zonesUrl, status: r.status, zones, rounds, k, loginRedirect: isLoginRedirect, finalUrl: (r as unknown as { url: string }).url ?? zonesUrl });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      json(res, 500, { error: msg, zonesUrl });
+    }
     return;
   }
 
