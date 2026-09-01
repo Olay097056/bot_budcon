@@ -170,6 +170,7 @@ export class BotEngine {
       config.paths.firefoxProfile,
       {
         headless: false,
+        ...(config.proxy ? { proxy: { server: config.proxy } } : {}),
         args: [
           '--no-sandbox',
           '--window-position=1100,40',

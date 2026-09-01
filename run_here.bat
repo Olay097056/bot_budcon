@@ -7,6 +7,7 @@ call npm install --silent >nul 2>&1
 echo * deps: OK
 if not exist "node_modules\playwright\package.json" call npx playwright install firefox >nul 2>&1
 echo * playwright: OK
+if defined BOT_BUDCON_PROXY (echo * proxy: ON) else (echo * proxy: off ^(set BOT_BUDCON_PROXY=http://user:pass@host:port to bypass Akamai on blocked IPs^))
 start "" http://localhost:7890
 echo * open: http://localhost:7890
 set BOT_BUDCON_LOGIN_DRIVER=invisible

@@ -142,15 +142,28 @@ export async function discoverEvents(opts: {
   const defaultFetcher = async (url: string) => {
     const host = new URL(url).host;
     const ck = buildCookieHeader(cookies, host);
+    const headers = {
+      ...(ck ? { Cookie: ck } : {}),
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
+      Referer: 'https://www.thaiticketmajor.com/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+    } as Record<string, string>;
+    // If BOT_BUDCON_PROXY is set, route fetch via it (for GitHub Actions
+    // datacenter IPs that Akamai blacklists). Node 22+ has undici built-in.
+    const proxy = (config as unknown as { proxy: string | null }).proxy;
+    let dispatcher: unknown = undefined;
+    if (proxy) {
+      try {
+        // @ts-ignore — undici is built into Node 22+, types optional
+        const { ProxyAgent } = await import('undici');
+        dispatcher = new (ProxyAgent as unknown as new (s:string)=>unknown)(proxy);
+      } catch { /* undici not available — fall through without proxy */ }
+    }
     const res = await fetch(url, {
-      headers: {
-        ...(ck ? { Cookie: ck } : {}),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
-        Referer: 'https://www.thaiticketmajor.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
-      },
+      headers,
       redirect: 'follow',
+      ...(dispatcher ? { dispatcher } as unknown as Record<string, unknown> : {}),
     });
     return { status: res.status, body: await res.text(), finalUrl: res.url as string };
   };

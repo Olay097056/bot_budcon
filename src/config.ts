@@ -44,6 +44,14 @@ export const config = {
   server: {
     port: Number(process.env.PORT ?? 7890),
   },
+  // BOT_BUDCON_PROXY — residential/mobile proxy to survive Akamai IP
+  // reputation blocks (GitHub Actions datacenter IPs are heavily
+  // blacklisted). Format: http://user:pass@host:port  or  socks5://...
+  // Leave empty for local runs (uses your home IP).
+  proxy: (() => {
+    const v = (process.env.BOT_BUDCON_PROXY ?? process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY ?? '').trim();
+    return v || null;
+  })(),
   // TTM — realtime discovery only. No event hardcode.
   // Use GET /api/events/discover (scrapes /concert/ live) as the
   // single source of truth. All targets come from TTM at runtime —

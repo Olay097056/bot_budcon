@@ -1,0 +1,52 @@
+name: discover (akamai-bypass check)
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "events to discover"
+        default: "12"
+        required: false
+  schedule:
+    - cron: "0 * * * *" # hourly — proves proxy still bypasses
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deps
+        run: npm ci
+      - name: Install Firefox
+        run: npx playwright install firefox --with-deps
+      # --- Proxy is the ONLY thing that fixes GitHub datacenter IP 403 ---
+      # 1) Get a residential proxy (Bright Data / Smartproxy / Oxylabs / ZenRows)
+      #    format: http://user:pass@host:port  or  socks5://...
+      # 2) Add it as repo secret BOT_BUDCON_PROXY (Settings → Secrets → Actions)
+      #    If empty, discover falls back to cached hydrate (works but not realtime)
+      - name: Discover (realtime, no hardcode)
+        env:
+          BOT_BUDCON_PROXY: ${{ secrets.BOT_BUDCON_PROXY }}
+          # fallback if you name it HTTPS_PROXY in secrets:
+          HTTPS_PROXY: ${{ secrets.BOT_BUDCON_PROXY }}
+        run: |
+          echo "proxy set: $([ -n \"$BOT_BUDCON_PROXY\" ] && echo yes || echo no — will use cache fallback)"
+          npx tsx -e "
+            import { discoverEvents } from './src/discover.js';
+            const r = await discoverEvents({limit: Number(process.env.LIMIT ?? 6)});
+            console.log('events:', r.events.length);
+            console.log('warnings:', r.warnings.join(' | ') || '(none)');
+            console.log(JSON.stringify(r.events.slice(0,3).map(e=>({q:e.query,title:e.title,zones:e.zones.length})), null, 2));
+            if (r.events.length===0) { console.error('discover returned 0 — proxy may be missing or blocked'); process.exit(1); }
+          " LIMIT=${{ inputs.limit || '6' }}
+      - name: Upload discover cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-cache
+          path: ~/.bot-budcon-data/discover-cache.json
+          if-no-files-found: ignore
