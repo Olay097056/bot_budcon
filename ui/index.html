@@ -50,6 +50,15 @@
       }
       button[disabled] { opacity: 0.5; cursor: not-allowed; }
       button.secondary { background: var(--border); color: var(--fg); }
+      select, input {
+        background: #06080c;
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font: inherit;
+        margin-right: 8px;
+      }
       pre {
         margin: 0;
         background: #06080c;
@@ -61,7 +70,7 @@
         font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
         color: var(--muted);
       }
-      .row { display: flex; gap: 16px; align-items: center; }
+      .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
       .row .kv { display: flex; flex-direction: column; }
       .row .kv span:first-child { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
       .row .kv span:last-child  { font: 13px ui-monospace, monospace; }
@@ -96,11 +105,39 @@
       </section>
 
       <section>
+        <h2>Watch (ticket 15)</h2>
+        <div class="row">
+          <span id="watch-dot" class="dot" title="watch status"></span>
+          <span id="watch-text" style="color: var(--muted)">idle</span>
+          <div class="kv" style="margin-left: auto;"><span>polls</span><span id="watch-polls">0</span></div>
+          <div class="kv"><span>target</span><span id="watch-target">—</span></div>
+        </div>
+        <p id="watch-detail" style="color: var(--muted); margin: 8px 0 0; font-size: 12px;"></p>
+        <p id="watch-event" style="color: var(--accent); margin: 8px 0 0; font-size: 12px; font-weight: 600;"></p>
+      </section>
+
+      <section>
         <h2>Actions</h2>
-        <button id="login-btn" type="button" title="Spawns an invisible (C++-patched) Firefox to bypass Akamai">🔓 Login (invisible)</button>
-        <button id="relogin-btn" type="button" class="secondary" disabled>🔁 Re-login</button>
-        <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
-        <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
+        <div class="row" style="margin-bottom: 10px;">
+          <button id="login-btn" type="button" title="Spawns an invisible (C++-patched) Firefox to bypass Akamai">🔓 Login (invisible)</button>
+          <button id="relogin-btn" type="button" class="secondary" disabled>🔁 Re-login</button>
+        </div>
+        <div class="row" style="margin-bottom: 10px;">
+          <select id="target-select" title="Pick TTM target (query)">
+            <option value="idol1st">idol1st (504)</option>
+            <option value="lany">lany</option>
+            <option value="joji">joji</option>
+            <option value="babymonster">babymonster</option>
+            <option value="dreaming">dreaming</option>
+          </select>
+          <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
+          <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
+        </div>
+        <div class="row">
+          <input id="book-code" type="text" placeholder="zone code (A1)" style="width: 120px;" maxlength="10" />
+          <button id="book-btn" type="button" class="secondary" disabled>🎯 Book Now</button>
+          <span style="color: var(--muted); font-size: 11px;">manual — uses last watch event if blank</span>
+        </div>
         <p id="action-note" style="color: var(--muted); margin: 8px 0 0;"></p>
       </section>
 
@@ -111,16 +148,15 @@
     </main>
 
     <script>
-      // Polling the status endpoint every 2 s. Cheap, no fetch library needed.
       const $ = (id) => document.getElementById(id);
-      let currentStatus = null;
+      let lastAuth = null;
+      let lastWatch = null;
 
       async function tick() {
         try {
           const r = await fetch('/api/status');
           if (!r.ok) throw new Error('status ' + r.status);
           const s = await r.json();
-          currentStatus = s;
           $('chromeAlive').textContent = String(s.chromeAlive);
           $('loggedIn').textContent   = String(s.loggedIn);
           $('watchActive').textContent = String(s.watchActive);
@@ -142,19 +178,21 @@
             label.textContent = 'browser ready, not logged in';
           } else {
             dot.className = 'dot';
-            label.textContent = 'idle';
+            label.textContent = s.loggedIn ? 'logged in' : 'idle';
           }
 
+          // Buttons — use lastAuth for relogin gate, s for loggedIn/watchActive
+          const authOk = lastAuth ? lastAuth.accept : s.loggedIn;
           $('login-btn').disabled  = s.loggedIn || s.watchActive;
           $('watch-btn').disabled  = !s.loggedIn || s.watchActive;
           $('stop-btn').disabled   = !s.watchActive;
-
-          // Ticket 11 — enable the Re-login button when the gate is bad
-          // and disable it while a re-login is in progress.
-          const relogin = g.lastRelogin;
-          if (relogin && relogin.lastResult === 'in_progress') {
+          // Book enabled when watch has seen a zone OR user typed a code and we are logged in
+          const hasZone = !!(lastWatch && lastWatch.lastEvent);
+          const codeTyped = $('book-code').value.trim().length > 0;
+          $('book-btn').disabled = !s.loggedIn || (!hasZone && !codeTyped);
+          if (lastAuth && lastAuth.lastRelogin && lastAuth.lastRelogin.lastResult === 'in_progress') {
             $('relogin-btn').disabled = true;
-          } else if (!g.accept) {
+          } else if (!authOk) {
             $('relogin-btn').disabled = false;
           } else {
             $('relogin-btn').disabled = true;
@@ -169,9 +207,6 @@
         }
       }
 
-      // Ticket 10 — gate verdict for the auth pill. Runs alongside
-      // the engine tick so the user sees whether the persisted
-      // cookies are still good for `book()` to proceed.
       async function authTick() {
         const dot = $('auth-dot');
         const text = $('auth-text');
@@ -181,6 +216,7 @@
           const r = await fetch('/api/auth/status');
           if (!r.ok) throw new Error('auth ' + r.status);
           const g = await r.json();
+          lastAuth = g;
           if (g.pill === 'ok') {
             dot.className = 'dot alive';
             text.textContent = 'Authenticated';
@@ -224,37 +260,76 @@
         }
       }
 
-      // Login button — ticket 04 wires the real endpoint; for now
-      // we 501, so just show the response text in the note.
+      async function watchTick() {
+        const dot = $('watch-dot');
+        const text = $('watch-text');
+        const pollsEl = $('watch-polls');
+        const targetEl = $('watch-target');
+        const detailEl = $('watch-detail');
+        const eventEl = $('watch-event');
+        try {
+          const r = await fetch('/api/watch/status');
+          if (!r.ok) throw new Error('watch ' + r.status);
+          const w = await r.json();
+          lastWatch = w;
+          pollsEl.textContent = String(w.pollCount ?? 0);
+          if (w.url) {
+            try { targetEl.textContent = new URL(w.url).searchParams.get('query') || w.url.slice(-30); } catch { targetEl.textContent = w.url.slice(-30); }
+          } else {
+            targetEl.textContent = '—';
+          }
+          if (w.active) {
+            dot.className = 'dot alive';
+            text.textContent = 'Watching';
+            text.style.color = 'var(--accent)';
+            const baseline = w.baseline ? w.baseline.join(',') : '…';
+            const lastZones = w.lastZones ? w.lastZones.join(',') : '…';
+            detailEl.textContent = `baseline: ${baseline} · last: ${lastZones}`;
+          } else {
+            dot.className = 'dot';
+            text.textContent = w.pollCount > 0 ? 'Stopped' : 'Idle';
+            text.style.color = 'var(--muted)';
+            if (w.lastError) detailEl.textContent = `last error: ${w.lastError}`;
+            else if (w.baseline) detailEl.textContent = `baseline: ${w.baseline.join(',')} · last: ${(w.lastZones||[]).join(',')}`;
+            else detailEl.textContent = '';
+          }
+          if (w.lastEvent) {
+            eventEl.textContent = `★ NEW zone ${w.lastEvent.code} @ ${new Date(w.lastEvent.observedAtMs).toLocaleTimeString()} — ready to Book`;
+          } else {
+            eventEl.textContent = '';
+          }
+          // Enable Book button if we have a lastEvent or typed code
+          const s = { loggedIn: lastAuth ? lastAuth.accept : false, watchActive: w.active };
+          const codeTyped = $('book-code').value.trim().length > 0;
+          $('book-btn').disabled = !s.loggedIn || (!w.lastEvent && !codeTyped);
+        } catch (e) {
+          dot.className = 'dot err';
+          text.textContent = 'unreachable (' + e.message + ')';
+          text.style.color = 'var(--err)';
+        }
+      }
+
       $('login-btn').addEventListener('click', async () => {
         $('action-note').textContent = 'starting login…';
         try {
           const r = await fetch('/api/login/start', { method: 'POST' });
           const body = await r.text();
-          $('action-note').textContent = r.ok ? 'login started' : ('login: ' + r.status + ' ' + body);
+          $('action-note').textContent = r.ok ? 'login started — complete captcha in Firefox' : ('login: ' + r.status + ' ' + body);
         } catch (e) {
           $('action-note').textContent = 'login error: ' + e.message;
         }
       });
 
-      // Ticket 11 — Re-login button. Only enabled when the gate
-      // pill is red; clicking it POSTs to /api/auth/relogin and
-      // the auth tick polls the result back into the pill.
       $('relogin-btn').addEventListener('click', async () => {
         $('relogin-btn').disabled = true;
         $('action-note').textContent = 're-login in progress…';
         try {
           const r = await fetch('/api/auth/relogin', { method: 'POST' });
           const body = await r.json();
-          if (body.lastResult === 'ok') {
-            $('action-note').textContent = 're-login succeeded';
-          } else if (body.lastResult === 'in_progress') {
-            $('action-note').textContent = 're-login already in progress';
-          } else if (body.lastResult === 'backoff') {
-            $('action-note').textContent = 're-login skipped — inside back-off window';
-          } else {
-            $('action-note').textContent = 're-login did not refresh auth — complete the captcha manually';
-          }
+          if (body.lastResult === 'ok') $('action-note').textContent = 're-login succeeded';
+          else if (body.lastResult === 'in_progress') $('action-note').textContent = 're-login already in progress';
+          else if (body.lastResult === 'backoff') $('action-note').textContent = 're-login skipped — inside back-off window';
+          else $('action-note').textContent = 're-login did not refresh auth — complete the captcha manually';
         } catch (e) {
           $('action-note').textContent = 're-login error: ' + e.message;
         } finally {
@@ -263,18 +338,65 @@
         }
       });
 
-      // Watch / Stop are placeholders for ticket 05.
-      $('watch-btn').addEventListener('click', () => {
-        $('action-note').textContent = 'watch: not implemented yet (ticket 05)';
+      $('watch-btn').addEventListener('click', async () => {
+        const target = $('target-select').value;
+        $('action-note').textContent = 'starting watch for ' + target + '…';
+        $('watch-btn').disabled = true;
+        try {
+          const r = await fetch('/api/watch/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ target }) });
+          const body = await r.json();
+          if (r.ok) $('action-note').textContent = 'watch started → ' + body.url;
+          else if (r.status === 409) $('action-note').textContent = 'watch already active → ' + (body.url||'');
+          else if (r.status === 401) $('action-note').textContent = 'watch refused — ' + (body.error||'no_auth') + ' — login first';
+          else $('action-note').textContent = 'watch: ' + r.status + ' ' + JSON.stringify(body);
+        } catch (e) {
+          $('action-note').textContent = 'watch error: ' + e.message;
+        } finally {
+          watchTick(); tick();
+        }
       });
-      $('stop-btn').addEventListener('click', () => {
-        $('action-note').textContent = 'stop: not implemented yet (ticket 05)';
+
+      $('stop-btn').addEventListener('click', async () => {
+        $('action-note').textContent = 'stopping watch…';
+        try {
+          const r = await fetch('/api/watch/stop', { method: 'POST' });
+          const body = await r.json();
+          $('action-note').textContent = body.ok ? 'watch stopped' : 'stop: ' + JSON.stringify(body);
+        } catch (e) {
+          $('action-note').textContent = 'stop error: ' + e.message;
+        } finally {
+          watchTick(); tick();
+        }
       });
+
+      $('book-btn').addEventListener('click', async () => {
+        let code = $('book-code').value.trim().toUpperCase();
+        if (!code && lastWatch && lastWatch.lastEvent) code = lastWatch.lastEvent.code;
+        if (!code) { $('action-note').textContent = 'book: need zone code'; return; }
+        const zonesUrl = lastWatch && lastWatch.url ? lastWatch.url : `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${$('target-select').value==='idol1st'?'504':$('target-select').value}`;
+        $('action-note').textContent = 'booking ' + code + '…';
+        $('book-btn').disabled = true;
+        try {
+          const r = await fetch('/api/book/start', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, zonesUrl, quantity: 1 }) });
+          const body = await r.json();
+          if (body.humanStep) $('action-note').textContent = 'book paused at ' + body.step + ' — complete captcha/payment in Firefox';
+          else if (body.ok) $('action-note').textContent = 'book ok: ' + JSON.stringify(body);
+          else $('action-note').textContent = 'book ' + (body.step||'') + ': ' + (body.error||JSON.stringify(body));
+        } catch (e) {
+          $('action-note').textContent = 'book error: ' + e.message;
+        } finally {
+          $('book-btn').disabled = false;
+        }
+      });
+
+      $('book-code').addEventListener('input', () => { tick(); watchTick(); });
 
       tick();
       authTick();
+      watchTick();
       setInterval(tick, 2000);
       setInterval(authTick, 2000);
+      setInterval(watchTick, 2000);
     </script>
   </body>
 </html>

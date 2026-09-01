@@ -20,6 +20,8 @@ import { loadCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
 import { maybeRelogin, type AutoReloginState } from './auto-relogin.js';
 import { startLogin } from './login.js';
+import { getWatchManager } from './watch-manager.js';
+import { book, HumanStepRequired } from './book.js';
 
 // Single shared engine instance for the UI server's lifetime.
 const engine = new BotEngine();
@@ -58,6 +60,19 @@ function text(res: ServerResponse, status: number, body: string, contentType = '
   res.end(body);
 }
 
+/** Read JSON body (for POST /api/watch/start, /api/book/start). */
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString('utf-8').trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
 interface StatusResponse {
   chromeAlive: boolean;
   loggedIn: boolean;
@@ -82,8 +97,8 @@ function log(line: string): void {
 function getStatus(): StatusResponse {
   return {
     chromeAlive: engine.hasContext(),
-    loggedIn: false, // wired in ticket 04
-    watchActive: false, // wired in ticket 05
+    loggedIn: gate(loadCookies()).accept,
+    watchActive: getWatchManager().isActive(),
     sensorReady: true, // wreq-js verified in ticket 02
     port: config.server.port,
     lastLog: [...lastLog],
@@ -198,6 +213,92 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     });
     return;
   }
+
+  // Ticket 15 — watch loop wire
+  if (req.method === 'POST' && url.pathname === '/api/watch/start') {
+    const body = await readJsonBody(req);
+    let zonesUrl = typeof body['url'] === 'string' ? (body['url'] as string).trim() : '';
+    const targetKey = typeof body['target'] === 'string' ? (body['target'] as string).trim() : '';
+    if (!zonesUrl && targetKey) {
+      const t = (config.ttm.targets as Record<string, { event: string; query: string }>)[targetKey];
+      if (!t) {
+        json(res, 400, { error: 'unknown target', target: targetKey });
+        return;
+      }
+      zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(t.query)}`;
+    }
+    if (!zonesUrl) {
+      const t = config.ttm.targets[config.ttm.targetKey];
+      zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(t.query)}`;
+    }
+    if (!zonesUrl.startsWith('http')) {
+      zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(zonesUrl)}`;
+    }
+    const verdict = gate(loadCookies());
+    if (!verdict.accept) {
+      json(res, 401, { ok: false, error: verdict.reason ?? 'no_auth', gateReason: verdict.reason ?? 'no_auth' });
+      return;
+    }
+    const wm = getWatchManager(log);
+    const r = wm.start({ url: zonesUrl });
+    if (!r.ok && r.reason === 'already_active') {
+      json(res, 409, { ok: false, error: 'already_active', url: r.url });
+      return;
+    }
+    if (!r.ok) {
+      json(res, 400, { ok: false, error: r.reason });
+      return;
+    }
+    json(res, 202, { ok: true, phase: 'started', url: r.url });
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/watch/stop') {
+    const wm = getWatchManager(log);
+    await wm.stop();
+    json(res, 200, { ok: true, active: false });
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/api/watch/status') {
+    const wm = getWatchManager(log);
+    json(res, 200, wm.getStatus());
+    return;
+  }
+
+  // Ticket 15 — book wire (manual Book Now)
+  if (req.method === 'POST' && url.pathname === '/api/book/start') {
+    const body = await readJsonBody(req);
+    const code = typeof body['code'] === 'string' ? (body['code'] as string).trim().toUpperCase() : '';
+    const zonesUrl = typeof body['zonesUrl'] === 'string' ? (body['zonesUrl'] as string).trim()
+      : typeof body['url'] === 'string' ? (body['url'] as string).trim() : '';
+    const quantityRaw = body['quantity'];
+    const quantity = typeof quantityRaw === 'number' && Number.isFinite(quantityRaw) ? Math.floor(quantityRaw) : 1;
+    if (!code || !zonesUrl) {
+      json(res, 400, { ok: false, step: 'gate', error: 'code and zonesUrl required' });
+      return;
+    }
+    const cookies = loadCookies();
+    const verdict = gate(cookies);
+    if (!verdict.accept) {
+      json(res, 401, { ok: false, step: 'gate', gateReason: verdict.reason ?? 'no_auth', error: `gate ${verdict.reason ?? 'no_auth'}` });
+      return;
+    }
+    try {
+      const ctx = await engine.getContext();
+      const result = await book({ context: ctx, zonesUrl, code, quantity, cookies });
+      json(res, 200, result);
+      return;
+    } catch (e: unknown) {
+      if (e instanceof HumanStepRequired) {
+        json(res, 200, { ok: false, step: e.step, humanStep: true, error: e.message });
+        return;
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      log(`book error: ${msg}`);
+      json(res, 500, { ok: false, step: 'selectZone', error: msg });
+      return;
+    }
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/cmd') {
     text(res, 501, 'cmd dispatch not implemented — see wayfinder ticket 05');
     return;

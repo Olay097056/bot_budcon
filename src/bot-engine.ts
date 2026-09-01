@@ -20,6 +20,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from './config.js';
+import { loadCookies } from './cookies.js';
 
 export interface FetchOptions {
   /** Override the User-Agent; defaults to wreq-js' Chrome 149 impersonation. */
@@ -153,6 +154,30 @@ export class BotEngine {
         ],
       },
     );
+    // Seed the persistent profile from cookies.json so a hand-driven
+    // invisible login (ticket 14) is reusable from the book flow
+    // without requiring a second manual login in this profile.
+    // Playwright's addCookies expects explicit domain/path; the
+    // cookies.json store already carries those. Ignore failures
+    // (e.g. expired -1) so a single bad cookie doesn't kill launch.
+    try {
+      const store = loadCookies();
+      const pwCookies = store
+        .filter((c) => c.name && c.value && c.domain)
+        .map((c) => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
+          path: c.path ?? '/',
+          secure: Boolean(c.secure),
+          httpOnly: Boolean(c.httpOnly),
+          expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
+          sameSite: 'Lax' as const,
+        }));
+      if (pwCookies.length) await this._context.addCookies(pwCookies);
+    } catch {
+      // best effort — book will surface a useful error if still not logged in
+    }
     return this._context;
   }
 
