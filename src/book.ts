@@ -115,9 +115,17 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
   // with a comma because the comma in `#fixed.php#A1` collides
   // with CSS list syntax. Use `page.$$` to query both and take the
   // first hit.
+  // TTM's zones page uses <area> (image-map) for most concerts,
+  // not <a> — include both so watch's parseZones and book's
+  // click target agree. The generic [href*=...] is a fallback
+  // for any future tag.
   const selectors = [
     `a[href*="#fixed.php#${code}"]`,
     `a[href*="#festival.php#${code}"]`,
+    `area[href*="#fixed.php#${code}"]`,
+    `area[href*="#festival.php#${code}"]`,
+    `[href*="#fixed.php#${code}"]`,
+    `[href*="#festival.php#${code}"]`,
   ];
   let link: Awaited<ReturnType<Page['$']>> | null = null;
   for (const sel of selectors) {
@@ -130,7 +138,7 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
   try {
     await Promise.all([
       page.waitForLoadState('domcontentloaded', { timeout: 10_000 }),
-      link.click(),
+      link.click({ force: true }),
     ]);
     return { ok: true, step: 'selectZone' };
   } catch (e) {

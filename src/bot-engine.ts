@@ -117,7 +117,30 @@ export class BotEngine {
    * `parent.lock` errors when Firefox died mid-launch.
    */
   async getContext(): Promise<BrowserContext> {
-    if (this._context) return this._context;
+    if (this._context) {
+      // Re-seed on every access so a fresh invisible login (ticket 14)
+      // is picked up without needing to restart the server / kill
+      // the persistent profile.
+      try {
+        const store = loadCookies();
+        const pwCookies = store
+          .filter((c) => c.name && c.value && c.domain)
+          .map((c) => ({
+            name: c.name,
+            value: c.value,
+            domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
+            path: c.path ?? '/',
+            secure: Boolean(c.secure),
+            httpOnly: Boolean(c.httpOnly),
+            expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
+            sameSite: 'Lax' as const,
+          }));
+        if (pwCookies.length) await this._context.addCookies(pwCookies);
+      } catch {
+        // best effort
+      }
+      return this._context;
+    }
 
     // Pick Firefox (TTM detection fits Firefox best per ticket 07
     // recon — sensor+TLS parity is cleanest there). Chromium is
