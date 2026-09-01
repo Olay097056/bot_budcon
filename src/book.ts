@@ -172,9 +172,23 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
         if (!first) return { ok: false, step: 'selectZone', error: 'no round available' };
         pickedRound = first;
         await page.selectOption('#rdId', first);
-        // round_change() triggers form submit -> page reload
+        // Explicitly trigger round_change() — selectOption's change event
+        // doesn't always fire the inline onchange handler (jQuery inline).
+        try {
+          await page.evaluate(() => {
+            const w = globalThis as unknown as Record<string, unknown>;
+            const fn = (w as unknown as { round_change?: () => void }).round_change
+              ?? (w as unknown as { window?: Record<string, unknown> }).window?.['round_change'] as (() => void) | undefined;
+            if (typeof fn === 'function') fn();
+          });
+        } catch {}
+        // round_change() does form POST -> page reload with ?rdId=...&k=...&tk=...
         await page.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => {});
         await page.waitForTimeout(1500);
+        // If still on query=504 without rdId, wait a bit more and try once more
+        if (page.url().includes('zones.php?query=')) {
+          await page.waitForTimeout(1000);
+        }
         // re-resolve href after reload (k may have changed, but code stays)
         // re-find the zone anchor after reload to determine fixed vs festival
         let newHref: string | null = null;
@@ -208,14 +222,37 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
   const base = new URL(page.url());
   const fullUrl = new URL(zoneUrl, base).toString();
   try {
-    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-    await page.waitForTimeout(800);
+    // Use location.href so the browser sends Referer: zones.php?rdId=...&k=...&tk=...
+    // (TTM rejects direct page.goto without Referer with errcode=9).
+    // Try to mimic the real selectzone() call first — it does extra
+    // $(form).loading() — then fall back to plain location.href.
+    const hrefForJs = `#${pg}#${code}`;
+    let navOk = false;
+    try {
+      await page.evaluate((h: string) => {
+        const w = (globalThis as unknown as { window?: Record<string, unknown> }).window ?? globalThis as unknown as Record<string, unknown>;
+        const ww = (w['window'] as Record<string, unknown> | undefined) ?? w;
+        const fn = (ww['selectzone'] ?? w['selectzone']) as ((a: string, e: unknown) => void) | undefined;
+        if (typeof fn === 'function') {
+          fn(h, { ctrlKey: false, shiftKey: false } as unknown as Event);
+        } else {
+          // fallback: should not happen on real TTM, outer fallback handles it
+          (globalThis as unknown as { location: { href: string } }).location.href = h;
+        }
+      }, hrefForJs);
+      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+      await page.waitForTimeout(1000);
+      navOk = true;
+    } catch {}
+    if (!navOk || page.url().includes('zones.php')) {
+      // Fallback: direct location.href via evaluate (ensures Referer)
+      await page.evaluate((u: string) => { (globalThis as unknown as { location: { href: string } }).location.href = u; }, fullUrl);
+      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+      await page.waitForTimeout(1000);
+    } else if (page.url().includes('error.php') || page.url().includes('errcode')) {
+      // still check — selectzone may have already navigated to error
+    }
     // Detect TTM sale-not-open (errcode=9) or round-stale error.
-    // All current TTM queries (504, 622, 747, ...) return error.php?errcode=9
-    // with Thai "กรุณาเลือกรอบการแสดงใหม่จากหน้าโซน" when the sale
-    // hasn't opened (05-06 Sep 2026 etc). Direct fetch always 302s,
-    // Playwright goto follows to error.php — detect it here so the
-    // caller gets a clear message and can try another event.
     const landed = page.url();
     if (landed.includes('error.php') || landed.includes('errcode=9')) {
       const html = await page.content().catch(()=>'');
@@ -225,7 +262,6 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
       }
       return { ok: false, step: 'selectZone', error: `blocked at ${landed}` };
     }
-    // Also check body for errcode=9 even if URL didn't change (meta refresh)
     try {
       const html = await page.content();
       if (html.includes('errcode=9') && html.includes('กรุณาเลือกรอบการแสดงใหม่')) {
@@ -240,9 +276,14 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
 
 export async function selectQuantity(page: Page, quantity: number): Promise<BookResult> {
   try {
-    // TTM exposes the ticket count as either an input[name=qty] or
-    // a select. We try both. If neither exists we assume the page
-    // already defaults to 1.
+    // Fixed seating (fixed.php) uses seat-map click, not qty input.
+    // Try to auto-pick `quantity` seats from #tableseats if present.
+    const hasTable = await page.$('#tableseats');
+    if (hasTable) {
+      const picked = await pickSeats(page, quantity);
+      if (!picked.ok) return picked;
+    }
+    // Fallback: legacy qty input (for non-fixed events)
     const qtyInput = await page.$('input[name="qty"], input[name="quantity"], select[name="qty"]');
     if (qtyInput) {
       await qtyInput.fill(String(quantity));
@@ -254,10 +295,67 @@ export async function selectQuantity(page: Page, quantity: number): Promise<Book
   }
 }
 
+async function pickSeats(page: Page, quantity: number): Promise<BookResult> {
+  try {
+    // Find available seat TDs: td[title] containing div.seatuncheck
+    const seats: string[] = await page.$$eval('#tableseats td', (tds) =>
+      (tds as unknown as { querySelector: (s:string)=>unknown; getAttribute: (a:string)=>string|null }[])
+        .map((td) => {
+          const has = (td as unknown as { querySelector: (s:string)=>unknown }).querySelector('div.seatuncheck');
+          const title = td.getAttribute('title');
+          return has && title ? title : null;
+        })
+        .filter(Boolean) as string[],
+    ).catch(() => []);
+    if (seats.length === 0) {
+      // No available seats in this zone/round
+      return { ok: false, step: 'selectQuantity', error: 'no available seats in zone (all seatnotavail)' };
+    }
+    const toPick = seats.slice(0, quantity);
+    for (const title of toPick) {
+      // Click the <td> — fixed.js listens on tr > td
+      const sel = `td[title="${title}"]`;
+      const td = await page.$(sel);
+      if (td) {
+        try {
+          await (td as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true } as unknown as never);
+        } catch {
+          // fallback via evaluate
+          await page.evaluate((t: string) => {
+            const el = (globalThis as unknown as { document: { querySelector: (s:string)=>{ click: ()=>void }|null } }).document.querySelector(`td[title="${t}"]`);
+            el?.click();
+          }, title);
+        }
+        await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(600).catch(() => {});
+      }
+    }
+    // Wait for validateseat.php AJAX to settle and hidden inputs to appear
+    await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(1000).catch(() => {});
+    // Verify at least one hidden chkSeats[] was created
+    const chkCount: number = await page.$$eval("input[id^='hid-checkseat']", (els) => els.length).catch(() => 0);
+    if (chkCount === 0) {
+      // Sometimes fixed.js needs a tick — try one more wait
+      await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(1500).catch(() => {});
+      const chk2: number = await page.$$eval("input[id^='hid-checkseat']", (els) => els.length).catch(() => 0);
+      if (chk2 === 0) return { ok: false, step: 'selectQuantity', error: `seat click did not register (tried ${toPick.join(',')})` };
+    }
+    return { ok: true, step: 'selectQuantity' };
+  } catch (e) {
+    return { ok: false, step: 'selectQuantity', error: (e as Error).message };
+  }
+}
+
 export async function confirmSeats(page: Page): Promise<BookResult> {
   try {
-    // TTM's fixed page varies by event — we accept Thai and English labels.
+    // TTM's fixed page uses #booknow / #bookmnow, not generic confirm.
     const candidates = [
+      '#booknow',
+      '#bookmnow',
+      'button#booknow',
+      'a#booknow',
+      'button:has-text("ยืนยันการจอง")',
+      'button:has-text("จองเลย")',
+      'button:has-text("ดำเนินการต่อ")',
       'button[name="confirm"]',
       'input[name="confirm"]',
       'input[type="submit"]',
@@ -287,10 +385,24 @@ export async function confirmSeats(page: Page): Promise<BookResult> {
       } catch {}
       return { ok: false, step: 'confirmSeats', error: 'no confirm button' };
     }
-    await Promise.all([
-      page.waitForLoadState('domcontentloaded', { timeout: 10_000 }),
-      (btn as unknown as { click: () => Promise<void> }).click(),
-    ]);
+    // Click can detach the element immediately when it triggers
+    // navigation (fixed.php -> next). Use force + sequential wait
+    // instead of Promise.all which races detachment against click.
+    try {
+      await (btn as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true } as unknown as never);
+    } catch (e) {
+      // If click threw "not attached" but navigation already started,
+      // consider it success — we landed to next page.
+      const msg = (e as Error).message ?? '';
+      if (msg.includes('not attached') || msg.includes('detached')) {
+        await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 10_000 }).catch(() => {});
+        await (page as unknown as { waitForTimeout?: (ms:number)=>Promise<void> }).waitForTimeout?.(800).catch(() => {});
+        return { ok: true, step: 'confirmSeats' };
+      }
+      throw e;
+    }
+    await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 10_000 }).catch(() => {});
+    await (page as unknown as { waitForTimeout?: (ms:number)=>Promise<void> }).waitForTimeout?.(800).catch(() => {});
     return { ok: true, step: 'confirmSeats' };
   } catch (e) {
     return { ok: false, step: 'confirmSeats', error: (e as Error).message };

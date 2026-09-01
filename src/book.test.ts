@@ -38,11 +38,12 @@ function pageWithElement(selectorToEl: Record<string, unknown>): MockPage {
     press: vi.fn(async () => undefined),
     click: vi.fn(async () => undefined),
     waitForLoadState: vi.fn(async () => undefined),
+    waitForTimeout: vi.fn(async () => undefined) as unknown as ReturnType<typeof vi.fn>,
     screenshot: vi.fn(async () => undefined),
     textContent: vi.fn(async () => null),
     goto: vi.fn(async () => undefined),
     url: vi.fn(() => 'about:blank'),
-  };
+  } as unknown as MockPage;
   return page;
 }
 
