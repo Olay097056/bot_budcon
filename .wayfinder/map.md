@@ -37,10 +37,10 @@ A TTM booking bot that is **Akamai-stable in every step** (concert discovery, zo
 - [Proxy A dad8801 — BOT_BUDCON_PROXY](src/config.ts + src/bot-engine.ts + src/discover.ts): `config.proxy` from env, `launchPersistentContext proxy:{server}`, undici ProxyAgent fallback. `.github/workflows/discover.yml` hourly.
 - [Self-hosted a7ca5dd — free bypass via home IP](.github/workflows/discover-selfhosted.yml + scripts/setup-selfhosted-runner.bat): `runs-on: self-hosted`, commits `cache/discover-cache.json` so cloud can hydrate for free.
 - [Launcher 58f4d43 — one-click keep](run_here.bat): 4 lines deps→playwright→open→server, no proxy prompt. Q4=A enforced.
+- [Close ticket 16 — Akamai audit](tickets/16-akamai-audit.md): Audited 11 HTTP touchpoints at ebacbfa. HARDENED 6 (discover fetch+fallback, book goto/fixed, login), PARTIAL 1 (preview cache-only), VULNERABLE 2 (watch.ts raw fetch + watch-manager), UNUSED 1 (wreq-js). Decision: ticket 17 must unify watch/preview onto hardened discover path; no raw fetch to TTM.
 
 ## Not yet specified
 
-- Whether `booking.thaiticketmajor.com` fixed.php/zones polling also needs the same browser fallback as concert/ discovery under heavier WAF.
 - Exact retry/backoff policy when Akamai returns 403/407/429 (how many browser retries before serving stale cache).
 - How to surface staleness (cache age) in the AI Control Deck without adding UI friction to the one-click flow.
 - Whether login's Firefox profile can be reused to warm the discover cache on first run (cold-start without prior cache).
