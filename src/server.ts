@@ -392,22 +392,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (!zonesUrl.startsWith('http')) zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(zonesUrl)}`;
     try {
       const q = (() => { try { return new URL(zonesUrl!).searchParams.get('query') ?? ''; } catch { return ''; } })();
-      const { loadCookies: lc, buildCookieHeader: bch } = await import('./cookies.js');
       const { parseZones: pz } = await import('./zones.js');
       const { _internal: di } = await import('./discover.js');
-      const cookies = lc();
-      const host = new URL(zonesUrl!).host;
-      const ck = bch(cookies, host);
-      const r = await fetch(zonesUrl!, {
-        headers: {
-          ...(ck ? { Cookie: ck } : {}),
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
-          Referer: 'https://www.thaiticketmajor.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
-        },
-      });
-      const bodyText = await r.text();
+      // Ticket 17: hardened chain — wreq-js → fetch → browser (audit: preview was cache-only, no browser fallback).
+      const { hardenedFetcher: hf } = await import('./ttm-fetch.js');
+      const r = await hf({ referer: 'https://www.thaiticketmajor.com/' })(zonesUrl!);
+      const bodyText = r.body;
+      const status = r.status;
       let zones = r.status >= 200 && r.status < 300 ? pz(bodyText).map((z) => z.code) : [];
       let rounds = r.status >= 200 && r.status < 300 ? (di as unknown as { parseRounds: (s: string) => string[] }).parseRounds(bodyText) : [];
       let k = r.status >= 200 && r.status < 300 ? (di as unknown as { parseK: (s: string) => string | null }).parseK(bodyText) : null;
@@ -433,7 +424,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const warnings: string[] = [];
       if (isWaf) warnings.push('live fetch WAF-blocked — serving cached zones if available');
       if (isLoginRedirect) warnings.push('zones redirected to signin (cookies may be stale)');
-      json(res, 200, { query: q || query, zonesUrl, status: r.status, zones, rounds, k, loginRedirect: isLoginRedirect, finalUrl: (r as unknown as { url: string }).url ?? zonesUrl, warnings });
+      json(res, 200, { query: q || query, zonesUrl, status, zones, rounds, k, loginRedirect: isLoginRedirect, finalUrl: r.finalUrl ?? zonesUrl, warnings });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       json(res, 500, { error: msg, zonesUrl });

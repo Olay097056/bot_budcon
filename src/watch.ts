@@ -11,10 +11,9 @@
  * zones is treated as "baseline already-known" — we only fire on
  * a zone that appears *after* the loop started.
  */
-import { loadCookies } from './cookies.js';
-import { buildCookieHeader } from './cookies.js';
 import { parseZones, type ZoneMatch } from './zones.js';
 import { config } from './config.js';
+import { hardenedFetcher } from './ttm-fetch.js';
 
 export interface WatchOptions {
   url: string;
@@ -88,18 +87,12 @@ export async function* watch(opts: WatchOptions): AsyncGenerator<WatchEvent, voi
 }
 
 async function defaultFetcher(url: string): Promise<{ status: number; body: string }> {
-  const cookies = loadCookies();
-  const host = new URL(url).host;
-  const ck = buildCookieHeader(cookies, host);
-  const res = await fetch(url, {
-    headers: {
-      ...(ck ? { Cookie: ck } : {}),
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
-    },
-  });
-  return { status: res.status, body: await res.text() };
+  // Ticket 17: hardened chain (wreq-js → node fetch → browser) with cookies.
+  // Old comment claimed wreq-js should be avoided — stale: wreq-js exists
+  // precisely for this (Chrome 149 JA3), and the chain falls back to the
+  // real browser when both light transports hit a WAF challenge.
+  const r = await hardenedFetcher({ referer: 'https://www.thaiticketmajor.com/' })(url);
+  return { status: r.status, body: r.body };
 }
 
 function sleep(ms: number, nowMs: () => number): Promise<void> {

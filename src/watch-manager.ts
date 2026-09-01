@@ -15,8 +15,8 @@
  *   - Single-flight parallels the login flow (`loginInFlight`).
  */
 
-import { loadCookies, buildCookieHeader } from './cookies.js';
 import { parseZones, type ZoneMatch } from './zones.js';
+import { hardenedFetcher } from './ttm-fetch.js';
 
 export interface WatchManagerStatus {
   active: boolean;
@@ -58,17 +58,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function defaultFetcher(url: string): Promise<{ status: number; body: string }> {
-  const cookies = loadCookies();
-  const host = new URL(url).host;
-  const ck = buildCookieHeader(cookies, host);
-  const res = await fetch(url, {
-    headers: {
-      ...(ck ? { Cookie: ck } : {}),
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
-    },
-  });
-  return { status: res.status, body: await res.text() };
+  // Ticket 17: hardened chain (wreq-js → node fetch → Playwright browser).
+  // The old raw native fetch stalled forever on Akamai 403 with no fallback.
+  const r = await hardenedFetcher({ referer: 'https://www.thaiticketmajor.com/' })(url);
+  return { status: r.status, body: r.body };
 }
 
 export class WatchManager {
