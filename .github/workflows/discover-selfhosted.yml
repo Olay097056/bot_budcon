@@ -1,0 +1,84 @@
+name: discover (self-hosted - free Akamai bypass via home IP)
+
+# Use home IP (residential) instead of GitHub datacenter IP - Akamai will not block 403
+# No proxy/unlocker cost - runs on machine with runner installed
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "events to discover"
+        default: "12"
+        required: false
+      commit_cache:
+        description: "commit discover-cache.json back to repo?"
+        type: boolean
+        default: true
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    paths:
+      - "src/discover.ts"
+      - "src/config.ts"
+
+jobs:
+  discover:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install deps
+        shell: bash
+        run: npm ci
+
+      - name: Install Firefox
+        shell: bash
+        run: npx playwright install firefox --with-deps
+
+      - name: Discover (realtime, home IP - no proxy needed)
+        shell: bash
+        env:
+          BOT_BUDCON_PROXY: ${{ secrets.BOT_BUDCON_PROXY }}
+        run: |
+          echo "runner IP check (should be residential, not Azure/AWS):"
+          curl -s https://ipinfo.io/json 2>&1 | head -n 20 || true
+          echo "--- discover ---"
+          LIMIT="${{ inputs.limit || '12' }}"
+          npx tsx -e "
+            import { discoverEvents } from './src/discover.js';
+            const r = await discoverEvents({limit: Number(process.env.LIMIT ?? 12)});
+            console.log('events:', r.events.length);
+            console.log('warnings:', r.warnings.join(' | ') || '(none)');
+            console.log(JSON.stringify(r.events.map(e=>({q:e.query,title:e.title,zones:e.zones.length})).slice(0,5), null, 2));
+            if (r.events.length===0) { console.error('discover returned 0 - home IP may also be blocked'); process.exit(1); }
+          " LIMIT="$LIMIT"
+
+      - name: Upload discover cache artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-cache-selfhosted
+          path: ~/.bot-budcon-data/discover-cache.json
+          if-no-files-found: warn
+
+      - name: Commit cache back to repo
+        if: ${{ inputs.commit_cache != false }}
+        shell: bash
+        run: |
+          CACHE="$HOME/.bot-budcon-data/discover-cache.json"
+          DEST="cache/discover-cache.json"
+          if [ ! -f "$CACHE" ]; then echo "no cache at $CACHE"; exit 0; fi
+          mkdir -p cache
+          cp "$CACHE" "$DEST"
+          if git diff --quiet -- "$DEST"; then echo "cache unchanged - skip commit"; exit 0; fi
+          git config user.name "bot-budcon [self-hosted]"
+          git config user.email "bot@self-hosted"
+          git add "$DEST"
+          git commit -m "chore(cache): update discover-cache.json from self-hosted runner [skip ci]"
+          git push
