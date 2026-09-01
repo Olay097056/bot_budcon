@@ -140,6 +140,9 @@
           <button id="preview-btn" type="button" class="ghost" title="Probe zones/rounds for the custom query without starting Watch">👁 Preview</button>
         </div>
         <div class="row" style="margin-bottom: 10px;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer;">
+            <input id="autobook-check" type="checkbox" /> auto-book when new zone appears
+          </label>
           <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
           <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
         </div>
@@ -157,8 +160,10 @@
           <input id="book-code" type="text" placeholder="zone code (A1)" style="width: 120px;" maxlength="10" />
           <input id="book-qty" type="number" min="1" max="6" value="1" style="width:72px;" title="qty" />
           <button id="book-btn" type="button" class="secondary" disabled>🎯 Book Now</button>
+          <button id="finalize-btn" type="button" class="ghost" title="After you finish captcha/3-D Secure in Firefox, click to run finalConfirm">✅ Finalize (after payment)</button>
           <span style="color: var(--muted); font-size: 11px;">manual — uses last watch event if code blank</span>
         </div>
+        <p id="autobook-note" style="color: var(--warn); margin: 8px 0 0; font-size: 12px; display:none;"></p>
         <p id="action-note" style="color: var(--muted); margin: 8px 0 0;"></p>
       </section>
 
@@ -502,12 +507,20 @@
       $('watch-btn').addEventListener('click', async () => {
         const url = zonesUrlForCurrentSelection();
         if (!url) { $('action-note').textContent = 'watch: pick an event or enter a custom query'; return; }
-        $('action-note').textContent = 'starting watch for ' + url + '…';
+        const autoBook = $('autobook-check').checked;
+        const qtyRaw2 = $('book-qty').value;
+        const quantity2 = Math.max(1, Math.min(6, Number(qtyRaw2) || 1));
+        $('action-note').textContent = 'starting watch for ' + url + (autoBook ? ` (auto-book ×${quantity2})` : '') + '…';
         $('watch-btn').disabled = true;
         try {
-          const r = await fetch('/api/watch/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+          const r = await fetch('/api/watch/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url, autoBook, quantity: quantity2 }) });
           const body = await r.json();
-          if (r.ok) $('action-note').textContent = 'watch started → ' + body.url;
+          if (r.ok) {
+            $('action-note').textContent = 'watch started → ' + body.url + (body.autoBook ? ' · auto-book ON' : '');
+            const note = $('autobook-note');
+            if (body.autoBook) { note.textContent = 'auto-book ON — when a NEW zone appears it will book automatically (qty ' + body.quantity + ') → complete captcha/3-D Secure in Firefox then hit ✅ Finalize'; note.style.display = ''; }
+            else { note.style.display = 'none'; }
+          }
           else if (r.status === 409) $('action-note').textContent = 'watch already active → ' + (body.url||'');
           else if (r.status === 401) $('action-note').textContent = 'watch refused — ' + (body.error||'no_auth') + ' — login first';
           else $('action-note').textContent = 'watch: ' + r.status + ' ' + JSON.stringify(body);
@@ -524,6 +537,7 @@
           const r = await fetch('/api/watch/stop', { method: 'POST' });
           const body = await r.json();
           $('action-note').textContent = body.ok ? 'watch stopped' : 'stop: ' + JSON.stringify(body);
+          $('autobook-note').style.display = 'none';
         } catch (e) {
           $('action-note').textContent = 'stop error: ' + e.message;
         } finally {
@@ -544,13 +558,28 @@
         try {
           const r = await fetch('/api/book/start', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, zonesUrl, quantity }) });
           const body = await r.json();
-          if (body.humanStep) $('action-note').textContent = 'book paused at ' + body.step + ' — complete captcha/payment in Firefox';
+          if (body.humanStep) $('action-note').textContent = 'book paused at ' + body.step + ' — complete captcha/payment in Firefox, then hit ✅ Finalize';
           else if (body.ok) $('action-note').textContent = 'book ok: ' + JSON.stringify(body);
           else $('action-note').textContent = 'book ' + (body.step||'') + ': ' + (body.error||JSON.stringify(body));
         } catch (e) {
           $('action-note').textContent = 'book error: ' + e.message;
         } finally {
           $('book-btn').disabled = false;
+        }
+      });
+
+      $('finalize-btn').addEventListener('click', async () => {
+        $('action-note').textContent = 'finalizing… (running finalConfirm in Firefox)';
+        $('finalize-btn').disabled = true;
+        try {
+          const r = await fetch('/api/book/finalize', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+          const body = await r.json();
+          if (body.ok) $('action-note').textContent = 'finalize ok — confirmationId=' + (body.confirmationId ?? '—') + ' screenshot=' + (body.screenshotPath ?? '—');
+          else $('action-note').textContent = 'finalize failed at ' + (body.step||'?') + ': ' + (body.error || JSON.stringify(body));
+        } catch (e) {
+          $('action-note').textContent = 'finalize error: ' + e.message;
+        } finally {
+          $('finalize-btn').disabled = false;
         }
       });
 

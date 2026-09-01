@@ -34,6 +34,11 @@ export interface WatchManagerStartOpts {
   target?: string;
   fetcher?: (url: string) => Promise<{ status: number; body: string }>;
   intervalMs?: number;
+  /** Auto-book when a new zone appears (requires onNewZone). */
+  autoBook?: boolean;
+  quantity?: number;
+  /** Called for each newly-detected zone code. Server wires this to BotEngine book. */
+  onNewZone?: (code: string, href: string) => void | Promise<void>;
 }
 
 export type LogFn = (line: string) => void;
@@ -77,6 +82,10 @@ export class WatchManager {
   private _lastError: string | null = null;
   private _abort = false;
   private _loopPromise: Promise<void> | null = null;
+  private _autoBook = false;
+  private _quantity = 1;
+  private _onNewZone: ((code: string, href: string) => void | Promise<void>) | null = null;
+  private _bookingInFlight = false;
 
   constructor(private readonly _log: LogFn = () => {}) {}
 
@@ -92,6 +101,9 @@ export class WatchManager {
       lastError: this._lastError,
     };
   }
+
+  get autoBook(): boolean { return this._autoBook; }
+  get quantity(): number { return this._quantity; }
 
   isActive(): boolean {
     return this._active;
@@ -124,6 +136,10 @@ export class WatchManager {
     this._lastEvent = null;
     this._lastError = null;
     this._abort = false;
+    this._autoBook = !!opts.autoBook;
+    this._quantity = typeof opts.quantity === 'number' && opts.quantity > 0 ? Math.floor(opts.quantity) : 1;
+    this._onNewZone = opts.onNewZone ?? null;
+    this._bookingInFlight = false;
 
     const fetcher = opts.fetcher ?? defaultFetcher;
     const intervalMs = opts.intervalMs ?? 5000;
@@ -212,6 +228,23 @@ export class WatchManager {
           newFound++;
           this._lastEvent = { code: z.code, href: z.href, observedAtMs: Date.now() };
           this._log(`watch poll #${pollN}: NEW zone ${z.code} detected — ${z.href}`);
+          // Auto-book: fire-and-forget single-flight per new zone
+          if (this._autoBook && this._onNewZone && !this._bookingInFlight) {
+            this._bookingInFlight = true;
+            const code = z.code;
+            const href = z.href;
+            void (async () => {
+              try {
+                this._log(`auto-book → ${code} (qty ${this._quantity}) — launching browser`);
+                await this._onNewZone!(code, href);
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                this._log(`auto-book ${code} failed: ${msg}`);
+              } finally {
+                this._bookingInFlight = false;
+              }
+            })();
+          }
         }
       }
       if (newFound === 0) {

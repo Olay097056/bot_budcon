@@ -172,8 +172,24 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
         if (!first) return { ok: false, step: 'selectZone', error: 'no round available' };
         pickedRound = first;
         await page.selectOption('#rdId', first);
-        // Explicitly trigger round_change() — selectOption's change event
-        // doesn't always fire the inline onchange handler (jQuery inline).
+        // selectOption doesn't fire jQuery's change handler — trigger it explicitly so round_change's
+        // form-submit path is taken (zones.php?rdId=... reload). Without this the later selectzone
+        // sees rd=='' and bails or navigates without session, leading to errcode=9 / no tableseats.
+        try {
+          await page.evaluate((v: string) => {
+            const d = (globalThis as unknown as { document: { querySelector: (s: string) => { value: string; dispatchEvent: (e: Event) => void } | null } }).document;
+            const sel = d.querySelector('#rdId') as unknown as { value: string; dispatchEvent: (e: Event) => void } | null;
+            if (sel) {
+              sel.value = v;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              sel.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            const w = globalThis as unknown as Record<string, unknown>;
+            const $ = (w as unknown as { $?: (s: string) => { val: (x: string) => { trigger: (e: string) => void } } }).$;
+            try { $?.('#rdId').val(v).trigger('change'); } catch {}
+          }, first);
+        } catch {}
+        // Explicitly trigger round_change() — inline onchange may not have fired yet.
         try {
           await page.evaluate(() => {
             const w = globalThis as unknown as Record<string, unknown>;

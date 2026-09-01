@@ -220,6 +220,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     const body = await readJsonBody(req);
     let zonesUrl = typeof body['url'] === 'string' ? (body['url'] as string).trim() : '';
     const targetKey = typeof body['target'] === 'string' ? (body['target'] as string).trim() : '';
+    const autoBook = body['autoBook'] === true || body['autoBook'] === 'true';
+    const quantityRaw2 = body['quantity'];
+    const quantity2 = typeof quantityRaw2 === 'number' && Number.isFinite(quantityRaw2) ? Math.floor(quantityRaw2) : 1;
     if (!zonesUrl && targetKey) {
       const t = (config.ttm.targets as Record<string, { event: string; query: string }>)[targetKey];
       if (!t) {
@@ -241,7 +244,24 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     const wm = getWatchManager(log);
-    const r = wm.start({ url: zonesUrl });
+    // auto-book callback: when a new zone appears, run the full book flow
+    const onNewZone = autoBook ? async (code: string, _href: string) => {
+      const cookies = loadCookies();
+      const v = gate(cookies);
+      if (!v.accept) { log(`auto-book ${code} skipped — gate ${v.reason}`); return; }
+      try {
+        const ctx = await engine.getContext();
+        log(`auto-book ${code} — book start (qty ${quantity2})`);
+        await book({ context: ctx, zonesUrl: zonesUrl!, code, quantity: quantity2, cookies });
+      } catch (e: unknown) {
+        if (e instanceof HumanStepRequired) {
+          log(`auto-book ${code} → human step at ${e.step} — complete captcha/3-D Secure in Firefox, then POST /api/book/finalize`);
+          return;
+        }
+        throw e;
+      }
+    } : undefined;
+    const r = wm.start({ url: zonesUrl, autoBook, quantity: quantity2, onNewZone });
     if (!r.ok && r.reason === 'already_active') {
       json(res, 409, { ok: false, error: 'already_active', url: r.url });
       return;
@@ -250,7 +270,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       json(res, 400, { ok: false, error: r.reason });
       return;
     }
-    json(res, 202, { ok: true, phase: 'started', url: r.url });
+    json(res, 202, { ok: true, phase: 'started', url: r.url, autoBook, quantity: quantity2 });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/watch/stop') {
@@ -290,12 +310,41 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     } catch (e: unknown) {
       if (e instanceof HumanStepRequired) {
+        log(`book ${code} → human step at ${e.step} — Firefox window is ready for captcha/3-D Secure`);
         json(res, 200, { ok: false, step: e.step, humanStep: true, error: e.message });
         return;
       }
       const msg = e instanceof Error ? e.message : String(e);
       log(`book error: ${msg}`);
       json(res, 500, { ok: false, step: 'selectZone', error: msg });
+      return;
+    }
+  }
+
+  // Ticket 15b — finalize after human completes payment (captcha / 3-D Secure)
+  // POST /api/book/finalize {screenshotPath?}
+  if (req.method === 'POST' && url.pathname === '/api/book/finalize') {
+    const body = await readJsonBody(req);
+    const screenshotPath = typeof body['screenshotPath'] === 'string' ? body['screenshotPath'].trim() : undefined;
+    const cookies = loadCookies();
+    const verdict = gate(cookies);
+    if (!verdict.accept) {
+      json(res, 401, { ok: false, step: 'gate', gateReason: verdict.reason ?? 'no_auth', error: `gate ${verdict.reason ?? 'no_auth'}` });
+      return;
+    }
+    try {
+      const ctx = await engine.getContext();
+      const page = ctx.pages()[0] ?? await ctx.newPage();
+      const { finalConfirm } = await import('./book.js');
+      const result = await finalConfirm(page, screenshotPath);
+      if (result.ok) log(`finalConfirm ok — confirmationId=${result.confirmationId ?? '(none)'} screenshot=${result.screenshotPath ?? '-'}`);
+      else log(`finalConfirm failed at ${result.step}: ${result.error}`);
+      json(res, result.ok ? 200 : 500, result);
+      return;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log(`finalize error: ${msg}`);
+      json(res, 500, { ok: false, step: 'finalConfirm', error: msg });
       return;
     }
   }
