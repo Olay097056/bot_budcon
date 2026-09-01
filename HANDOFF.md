@@ -1,8 +1,8 @@
 # bot_budcon — final session summary
 
-**Status**: **ticket 15 wired** at `8f3ba1a` (2026-09-01 02:52 ICT) — Watch/Book UI ↔ server wired, live zones verified
+**Status**: **auto-book + finalize** at `a213578` (2026-09-01 04:45 ICT) — Watch auto-book loop + payment→finalConfirm wired, round_change jQuery fix, D1 reliably reaches payment
 **Repository**: https://github.com/Olay097056/bot_budcon
-**Tests**: 87/87 vitest passing (hermetic — watch-manager 7 new, book.test hermetic).
+**Tests**: 91/91 vitest passing (watch-manager auto-book + book jQuery trigger).
 **HANDOFF.md**: this file is the canonical handoff for next session.
 
 ## Shipped this session (wayfinder tickets)
@@ -27,11 +27,15 @@
 | 12B | on-sale probe + 5 events verified            | closed    | `c7231f6` |
 | 14  | live login runbook (HANDOFF)                 | **closed — live PASS 02:43** | `dab3724`+`a0d3a1e` |
 | 15  | Watch + Book wire (UI ↔ server)             | **wired — live zones A1-A3 verified 02:52** | `8f3ba1a` |
+| 15b | discover generic (every concert)             | shipped — 18 queries from concert/ | `34ac635` |
+| 15c | Referer fix (errcode=9 was missing Referer)   | shipped — selectzone+Referer, D1→payment | `297693f` |
+| 15d | auto-book + finalize + round_change jQuery   | **shipped — auto-book loop + finalize, D1 reliably payment** | `a213578` |
 
 ## Next session (open)
 
-- Ticket 14 **VERIFIED LIVE** 2026-09-01 02:43: `POST /api/login/start` → invisible Firefox 151 (C++-patched, `headless=False`) เปิด `https://www.thaiticketmajor.com/user/signin.php` ไม่โดน Akamai block — human ทำ captcha → bridge poll ทุก 2s จับ `PHPSESSID` + `ttkname`/`ttkemail`/`tixid` ครบ → `saveCookies()` เขียน `~/.bot-budcon-data/cookies.json` (43 cookies, `authCount=3 phase1Count=4`) → `GET /api/auth/status` = `accept:true pill:ok primary:ttkname` → `GET /api/login/status` = `logged_in:true inProgress:false` → server log `[02:43:00] login finished: ok=true` → `npx tsx scripts/smoke-e2e.ts` = `gate accept=true` + `80/80 GREEN` (หลังแก้ `book.test.ts` ให้ mock `loadCookies`).
-- Ticket 15 **WIRED 02:52**: `POST /api/watch/start` + `POST /api/watch/stop` + `GET /api/watch/status` + `POST /api/book/start` wired to `src/watch-manager.ts` single-flight + `src/bot-engine.ts` cookie-seeded persistent Firefox (1100,40). Live verify: `curl POST /api/watch/start → 202` → `GET /api/watch/status → active:true pollCount:15 baseline:[A1,A2,A3,B1,B2,B3,C2,D1,D2,D3,E1,E2,E3,C1,C3]` — zones.php `?query=504` returns 15 real zones with `ttkname` cookies (fetch path). `curl POST /api/book/start Z9 → 200 {step:'selectZone', error:'no anchor for Z9'}` (Playwright launched). Gate 401 paths verified. UI: `🎯 Watch` now real start (target dropdown `idol1st/504` etc), `⏹ Stop` idempotent, `🎯 Book Now` (code+qty, gate-gated) → `POST /api/book/start`. Tests `87/87 GREEN` (7 new watch-manager). Honest gap: `book A1` still `no anchor for A1` via Playwright even though fetch sees A1 — needs wreq-vs-browser refactor (deferred).
+- Ticket 14 **VERIFIED LIVE** 2026-09-01 02:43: `POST /api/login/start` → invisible Firefox 151 (C++-patched, `headless=False`) เปิด `https://www.thaiticketmajor.com/user/signin.php` ไม่โดน Akamai block — human ทำ captcha → bridge poll 2s จับ `PHPSESSID` + `ttkname` → `saveCookies()` 43 cookies `pill:ok` → `login finished: ok=true`.
+- Ticket 15 **WIRED 02:52 + 15c 297693f + 15d a213578**: `POST /api/watch/start {autoBook,quantity}` + `auto-book loop` (watch-manager onNewZone single-flight) + `POST /api/book/start` + `POST /api/book/finalize` (finalConfirm after captcha/3-D Secure) + `round_change jQuery trigger` fix (selectOption → dispatchEvent + $('#rdId').val().trigger('change') → zones.php?rdId=... reload → fixed.php 170k tableseats → pickSeats CC-08 → #booknow → payment humanStep). Live: `D1 504@81634` 17 seats → `payment humanStep:true` reliably; `watch baseline 15` autoBook:true; `finalize` → `no final confirm button` (expected before captcha). `discover` 18 queries, generic `concert/` scrape.
+- Payment deliberately HumanStepRequired (captcha/3-D Secure not automated) — UI: Book Now → payment → complete in Firefox → ✅ Finalize.
 
 ## What works end-to-end (today) — ticket 15 wired 02:52
 

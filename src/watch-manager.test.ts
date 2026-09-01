@@ -101,4 +101,35 @@ describe('WatchManager single-flight', () => {
     expect(s.baseline).toEqual(expect.arrayContaining(['A1']));
     await wm.stop();
   });
+
+  it('auto-book fires onNewZone when enabled and new zone appears', async () => {
+    const onNewZone = vi.fn(async () => {});
+    const wm = new WatchManager(() => {});
+    let polls = 0;
+    const fetcher = vi.fn(async () => {
+      polls++;
+      if (polls === 1) return { status: 200, body: '<area href="#fixed.php#A1">' };
+      return { status: 200, body: '<area href="#fixed.php#A1"><area href="#fixed.php#Z9">' };
+    });
+    wm.start({ url: 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', fetcher, intervalMs: 15, autoBook: true, quantity: 2, onNewZone });
+    await sleep(80);
+    expect(onNewZone).toHaveBeenCalledWith('Z9', expect.stringContaining('Z9'));
+    expect(wm.getStatus().lastEvent?.code).toBe('Z9');
+    await wm.stop();
+  });
+
+  it('auto-book does not fire when disabled', async () => {
+    const onNewZone = vi.fn(async () => {});
+    const wm = new WatchManager(() => {});
+    let polls = 0;
+    const fetcher = vi.fn(async () => {
+      polls++;
+      if (polls === 1) return { status: 200, body: '<area href="#fixed.php#A1">' };
+      return { status: 200, body: '<area href="#fixed.php#A1"><area href="#fixed.php#Z9">' };
+    });
+    wm.start({ url: 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', fetcher, intervalMs: 15, autoBook: false, onNewZone });
+    await sleep(70);
+    expect(onNewZone).not.toHaveBeenCalled();
+    await wm.stop();
+  });
 });
