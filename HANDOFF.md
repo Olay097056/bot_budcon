@@ -1,8 +1,8 @@
 # bot_budcon — final session summary
 
-**Status**: closed at commit `61ce19b` + final docs commit (the one that adds tickets 12/13).
+**Status**: live-verify **PASS** at `a0d3a1e` (2026-09-01 02:43 ICT) — `ttkname` persisted, gate green
 **Repository**: https://github.com/Olay097056/bot_budcon
-**Tests**: 80/80 vitest passing.
+**Tests**: 80/80 vitest passing (hermetic — live cookies no longer break book.test).
 **HANDOFF.md**: this file is the canonical handoff for next session.
 
 ## Shipped this session (wayfinder tickets)
@@ -25,28 +25,21 @@
 | 12  | invisible Playwright login (bypass + bridge) | shipped   | `61ce19b` |
 | 13  | Go cleanup (~2 GB reclaim)                   | closed    | `23d97e7` |
 | 12B | on-sale probe + 5 events verified            | closed    | `c7231f6` |
-| 14  | live login runbook (HANDOFF)                 | shipped   | `pending` |
+| 14  | live login runbook (HANDOFF)                 | **closed — live PASS 02:43** | `dab3724`+`a0d3a1e` |
 
 ## Next session (open)
 
-- [Ticket 14 — Live login runbook](.wayfinder/tickets/14-live-verify.md):
-  the human at the keyboard completes one captcha at the
-  TTM signin page; the Python invisible bridge picks up
-  the resulting cookies and `~/.bot-budcon-data/cookies.json`
-  is populated. Once that lands, `book()` + watch loop work
-  end-to-end without further human input until a cookie
-  expiry (auto re-login handles that).
+- Ticket 14 **VERIFIED LIVE** 2026-09-01 02:43: `POST /api/login/start` → invisible Firefox 151 (C++-patched, `headless=False`) เปิด `https://www.thaiticketmajor.com/user/signin.php` ไม่โดน Akamai block — human ทำ captcha → bridge poll ทุก 2s จับ `PHPSESSID` + `ttkname`/`ttkemail`/`tixid` ครบ → `saveCookies()` เขียน `~/.bot-budcon-data/cookies.json` (43 cookies, `authCount=3 phase1Count=4`) → `GET /api/auth/status` = `accept:true pill:ok primary:ttkname` → `GET /api/login/status` = `logged_in:true inProgress:false` → server log `[02:43:00] login finished: ok=true` → `npx tsx scripts/smoke-e2e.ts` = `gate accept=true` + `80/80 GREEN` (หลังแก้ `book.test.ts` ให้ mock `loadCookies`).
+- Next: ticket 15 — wire `🎯 Book Now` → `POST /api/book/start` + `watch` loop จริงกับ `zones.php?query=504` (ต้องมี zone ใหม่เปิดจึงจะ test ได้) หรือ ticket `multi-event` / `LINE webhook` ตามที่ user เลือก.
 
-## What works end-to-end (today)
+## What works end-to-end (today) — live-verified 02:43
 
 - **TLS bypass**: `wreq-js` impersonates Chrome 149 and clears
   Akamai's Phase-1 (`bm_mi` cookie issued). Verified raw
   (`HTTP 200 OK`) on the homepage + concert page.
-- **Login**: Playwright persistent Firefox context boots,
-  navigates to the root signin URL (the `event.*` cert is
-  untrusted from the bot's Firefox; the root is fine), polls
-  cookies every 2 s for 5 minutes for `ttkname` / `ttkemail` /
-  `tixid`. Persists to `~/.bot-budcon-data/cookies.json`.
+- **Login — LIVE PASS**: Invisible Playwright `headless=False` boots,
+  navigates to `https://www.thaiticketmajor.com/user/signin.php` without `Access Denied`, human captcha → `ttkname` persists. Evidence 02:43:
+  `curl /api/auth/status` → `{"accept":true,"primary":"ttkname","pill":"ok","authCount":3,"phase1Count":4}` + `cookies.json` contains `PHPSESSID,ttkname,ttkemail,tixid,ak_bmsc,bm_mi,_abck,bm_sv` etc (43 entries). Server log `login finished: ok=true`.
 - **Watch loop**: async generator polls `zones.php?query=504`
   every 5 s, records the first response as baseline, fires a
   `WatchEvent` on any new zone code.
