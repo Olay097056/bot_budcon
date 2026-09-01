@@ -23,6 +23,9 @@
 
 import { loadCookies, buildCookieHeader } from './cookies.js';
 import { parseZones } from './zones.js';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { config } from './config.js';
 
 export interface DiscoveredEvent {
   /** TTM query param for `booking/3m/zones.php?query=<query>` */
@@ -142,16 +145,61 @@ export async function discoverEvents(opts: {
     const res = await fetch(url, {
       headers: {
         ...(ck ? { Cookie: ck } : {}),
-        Accept: 'text/html,application/xhtml+xml',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
+        Referer: 'https://www.thaiticketmajor.com/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
       },
       redirect: 'follow',
     });
     return { status: res.status, body: await res.text(), finalUrl: res.url as string };
   };
-  const fetcher = opts.fetcher ?? defaultFetcher;
+  let fetcher = opts.fetcher ?? defaultFetcher;
 
-  const concertRes = await fetcher(concertUrl);
+  // --- 403/WAF fallback: if fetch is blocked by Akamai (403), retry via
+  // Playwright's real browser context which carries the valid _abck/bm
+  // fingerprint. This keeps discovery truly realtime without hardcode.
+  // Reuse one browser instance for the whole discover call.
+  let _browserEng: any = null;
+  let _browserCtx: import('playwright').BrowserContext | null = null;
+  async function getBrowserCtx() {
+    if (_browserCtx) return _browserCtx;
+    const { BotEngine } = await import('./bot-engine.js');
+    const eng: any = new (BotEngine as any)();
+    _browserEng = eng;
+    _browserCtx = await eng.getContext();
+    return _browserCtx;
+  }
+  async function fetchViaBrowser(url: string): Promise<{ status: number; body: string; finalUrl?: string }> {
+    const ctx = await getBrowserCtx() as import('playwright').BrowserContext;
+    const page = await ctx.newPage();
+    try {
+      const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+      // Wait a tick for Akamai WAF verify to settle if present
+      await page.waitForTimeout(1500).catch(()=>{});
+      const body = await page.content();
+      const status = resp?.status() ?? 200;
+      await page.close().catch(() => {});
+      return { status, body, finalUrl: page.url() };
+    } catch (e: unknown) {
+      await page.close().catch(() => {});
+      throw e;
+    }
+  }
+  async function fetchWithBrowserFallback(url: string): Promise<{ status: number; body: string; finalUrl?: string }> {
+    const r = await fetcher(url);
+    if (r.status !== 403 && r.status !== 429) return r;
+    try {
+      const br = await fetchViaBrowser(url);
+      // If browser also 403, return original
+      if (br.status === 403) return r;
+      return br;
+    } catch {
+      return r;
+    }
+  }
+
+  const concertRes = await fetchWithBrowserFallback(concertUrl);
   const html = concertRes.body;
   const listing = extractConcertListing(html).slice(0, limit);
 
@@ -163,11 +211,26 @@ export async function discoverEvents(opts: {
     warnings.push('no queries found on concert page');
   }
 
+  const cachePath = join(config.dataDir, 'discover-cache.json');
+  // Try to hydrate from cache when live fetch is blocked (Akamai 403)
+  function loadCache(): DiscoverResult | null {
+    try {
+      if (!existsSync(cachePath)) return null;
+      const raw = readFileSync(cachePath, 'utf-8');
+      const j = JSON.parse(raw) as DiscoverResult;
+      if (!j.events || j.events.length === 0) return null;
+      return j;
+    } catch { return null; }
+  }
+  function saveCache(result: DiscoverResult): void {
+    try { mkdirSync(config.dataDir, { recursive: true }); writeFileSync(cachePath, JSON.stringify(result), 'utf-8'); } catch {}
+  }
+
   const events: DiscoveredEvent[] = [];
   for (const item of listing) {
     const zonesUrl = buildZonesUrl(item.query);
     try {
-      const r = await fetcher(zonesUrl);
+      const r = await fetchWithBrowserFallback(zonesUrl);
       if (r.status >= 300) {
         // Keep the event but mark empty zones / warning — UI still
         // shows it so manual query works even if zones need a round.
@@ -190,7 +253,29 @@ export async function discoverEvents(opts: {
       events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones: [], rounds: [], k: null });
     }
   }
-  return { fetchedAtMs: Date.now(), concertUrl, events, warnings };
+  // Cache-or-hydrate: keep realtime but survive Akamai 403 windows
+  const liveResult: DiscoverResult = { fetchedAtMs: Date.now(), concertUrl, events, warnings: [...warnings] };
+  if (events.length > 0) {
+    // Success — persist for WAF-blocked fallback
+    saveCache(liveResult);
+  } else {
+    const cached = loadCache();
+    if (cached && cached.events.length > 0) {
+      const ageM = Math.round((Date.now() - cached.fetchedAtMs) / 60000);
+      // Return cached events but surface that this is stale + live warnings
+      const hydrated: DiscoverResult = {
+        fetchedAtMs: cached.fetchedAtMs,
+        concertUrl: cached.concertUrl,
+        events: cached.events.slice(0, limit),
+        warnings: [...warnings, `serving cached discovery (${cached.events.length} events, ${ageM}m ago) — live fetch blocked (403), retry later or use custom query`],
+      };
+      if (_browserEng) await (_browserEng as any).close().catch(()=>{});
+      return hydrated;
+    }
+  }
+  // cleanup browser fallback if used
+  if (_browserEng) await (_browserEng as any).close().catch(()=>{});
+  return liveResult;
 }
 
 // re-export for test introspection (not public API)

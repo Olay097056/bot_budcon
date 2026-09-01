@@ -376,6 +376,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // Preview a single zones.php — lightweight zones/rounds/k check for any query/url.
   // POST /api/events/preview {query|url} → {query, zonesUrl, zones, rounds, k, warnings}
   // Also gate-free; useful to probe a custom query before Watch/Book.
+  // Falls back to discover-cache when live fetch is WAF-blocked.
   if (req.method === 'POST' && url.pathname === '/api/events/preview') {
     const body = await readJsonBody(req);
     let zonesUrl = typeof body['url'] === 'string' ? (body['url'] as string).trim() : '';
@@ -400,16 +401,39 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const r = await fetch(zonesUrl!, {
         headers: {
           ...(ck ? { Cookie: ck } : {}),
-          Accept: 'text/html,application/xhtml+xml',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
+          Referer: 'https://www.thaiticketmajor.com/',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
         },
       });
       const bodyText = await r.text();
-      const zones = r.status >= 200 && r.status < 300 ? pz(bodyText).map((z) => z.code) : [];
-      const rounds = r.status >= 200 && r.status < 300 ? (di as unknown as { parseRounds: (s: string) => string[] }).parseRounds(bodyText) : [];
-      const k = r.status >= 200 && r.status < 300 ? (di as unknown as { parseK: (s: string) => string | null }).parseK(bodyText) : null;
+      let zones = r.status >= 200 && r.status < 300 ? pz(bodyText).map((z) => z.code) : [];
+      let rounds = r.status >= 200 && r.status < 300 ? (di as unknown as { parseRounds: (s: string) => string[] }).parseRounds(bodyText) : [];
+      let k = r.status >= 200 && r.status < 300 ? (di as unknown as { parseK: (s: string) => string | null }).parseK(bodyText) : null;
       const isLoginRedirect = bodyText.length < 400 && /url=\s*\/?user\/signin\.php/i.test(bodyText);
-      json(res, 200, { query: q || query, zonesUrl, status: r.status, zones, rounds, k, loginRedirect: isLoginRedirect, finalUrl: (r as unknown as { url: string }).url ?? zonesUrl });
+      const isWaf = bodyText.includes('waf-verify') || bodyText.includes('Access Denied') || r.status === 403;
+      // Cache fallback when WAF blocks preview
+      if ((isWaf || zones.length === 0) && q) {
+        try {
+          const { readFileSync: rfs, existsSync: es } = await import('node:fs');
+          const { join: jp } = await import('node:path');
+          const cp = jp(config.dataDir, 'discover-cache.json');
+          if (es(cp)) {
+            const j = JSON.parse(rfs(cp, 'utf-8')) as { events: Array<{query:string,zones:string[],rounds:string[],k:string|null, zonesUrl:string}> };
+            const hit = j.events.find(e=> e.query===q);
+            if (hit && hit.zones.length>0) {
+              zones = hit.zones;
+              rounds = hit.rounds;
+              k = hit.k;
+            }
+          }
+        } catch {}
+      }
+      const warnings: string[] = [];
+      if (isWaf) warnings.push('live fetch WAF-blocked — serving cached zones if available');
+      if (isLoginRedirect) warnings.push('zones redirected to signin (cookies may be stale)');
+      json(res, 200, { query: q || query, zonesUrl, status: r.status, zones, rounds, k, loginRedirect: isLoginRedirect, finalUrl: (r as unknown as { url: string }).url ?? zonesUrl, warnings });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       json(res, 500, { error: msg, zonesUrl });
