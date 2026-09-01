@@ -1,8 +1,8 @@
 # bot_budcon — final session summary
 
-**Status**: live-verify **PASS** at `a0d3a1e` (2026-09-01 02:43 ICT) — `ttkname` persisted, gate green
+**Status**: **ticket 15 wired** at `8f3ba1a` (2026-09-01 02:52 ICT) — Watch/Book UI ↔ server wired, live zones verified
 **Repository**: https://github.com/Olay097056/bot_budcon
-**Tests**: 80/80 vitest passing (hermetic — live cookies no longer break book.test).
+**Tests**: 87/87 vitest passing (hermetic — watch-manager 7 new, book.test hermetic).
 **HANDOFF.md**: this file is the canonical handoff for next session.
 
 ## Shipped this session (wayfinder tickets)
@@ -26,13 +26,14 @@
 | 13  | Go cleanup (~2 GB reclaim)                   | closed    | `23d97e7` |
 | 12B | on-sale probe + 5 events verified            | closed    | `c7231f6` |
 | 14  | live login runbook (HANDOFF)                 | **closed — live PASS 02:43** | `dab3724`+`a0d3a1e` |
+| 15  | Watch + Book wire (UI ↔ server)             | **wired — live zones A1-A3 verified 02:52** | `8f3ba1a` |
 
 ## Next session (open)
 
 - Ticket 14 **VERIFIED LIVE** 2026-09-01 02:43: `POST /api/login/start` → invisible Firefox 151 (C++-patched, `headless=False`) เปิด `https://www.thaiticketmajor.com/user/signin.php` ไม่โดน Akamai block — human ทำ captcha → bridge poll ทุก 2s จับ `PHPSESSID` + `ttkname`/`ttkemail`/`tixid` ครบ → `saveCookies()` เขียน `~/.bot-budcon-data/cookies.json` (43 cookies, `authCount=3 phase1Count=4`) → `GET /api/auth/status` = `accept:true pill:ok primary:ttkname` → `GET /api/login/status` = `logged_in:true inProgress:false` → server log `[02:43:00] login finished: ok=true` → `npx tsx scripts/smoke-e2e.ts` = `gate accept=true` + `80/80 GREEN` (หลังแก้ `book.test.ts` ให้ mock `loadCookies`).
-- Next: ticket 15 — wire `🎯 Book Now` → `POST /api/book/start` + `watch` loop จริงกับ `zones.php?query=504` (ต้องมี zone ใหม่เปิดจึงจะ test ได้) หรือ ticket `multi-event` / `LINE webhook` ตามที่ user เลือก.
+- Ticket 15 **WIRED 02:52**: `POST /api/watch/start` + `POST /api/watch/stop` + `GET /api/watch/status` + `POST /api/book/start` wired to `src/watch-manager.ts` single-flight + `src/bot-engine.ts` cookie-seeded persistent Firefox (1100,40). Live verify: `curl POST /api/watch/start → 202` → `GET /api/watch/status → active:true pollCount:15 baseline:[A1,A2,A3,B1,B2,B3,C2,D1,D2,D3,E1,E2,E3,C1,C3]` — zones.php `?query=504` returns 15 real zones with `ttkname` cookies (fetch path). `curl POST /api/book/start Z9 → 200 {step:'selectZone', error:'no anchor for Z9'}` (Playwright launched). Gate 401 paths verified. UI: `🎯 Watch` now real start (target dropdown `idol1st/504` etc), `⏹ Stop` idempotent, `🎯 Book Now` (code+qty, gate-gated) → `POST /api/book/start`. Tests `87/87 GREEN` (7 new watch-manager). Honest gap: `book A1` still `no anchor for A1` via Playwright even though fetch sees A1 — needs wreq-vs-browser refactor (deferred).
 
-## What works end-to-end (today) — live-verified 02:43
+## What works end-to-end (today) — ticket 15 wired 02:52
 
 - **TLS bypass**: `wreq-js` impersonates Chrome 149 and clears
   Akamai's Phase-1 (`bm_mi` cookie issued). Verified raw
@@ -97,7 +98,8 @@
    Click `🔓 Login` to do a real Firefox login, then `🎯 Watch`
    to start polling. The auth-cookie pill turns green once
    `ttkname` lands in `cookies.json`.
-5. `npx tsx scripts/smoke-e2e.ts` — verify the gate + watch
+5. `curl -X POST http://localhost:7890/api/watch/start -d '{"target":"idol1st"}'` — verify live zones baseline, then `⏹ Stop`
+5b. `npx tsx scripts/smoke-e2e.ts` — verify the gate + watch
    composition still works on this checkout.
 6. Pick up **Ticket 12** (real e2e) or **Ticket 13** (Go
    cleanup) per the user's choice.
