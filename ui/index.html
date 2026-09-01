@@ -1,597 +1,838 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bot_budcon</title>
-    <style>
-      :root {
-        --bg: #0f1115;
-        --fg: #e6e9ef;
-        --muted: #8b95a4;
-        --accent: #6ee7b7;
-        --warn: #fbbf24;
-        --err: #f87171;
-        --border: #1f2937;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font: 14px/1.5 ui-sans-serif, system-ui, sans-serif;
-        background: var(--bg);
-        color: var(--fg);
-      }
-      main { max-width: 780px; margin: 24px auto; padding: 0 16px; }
-      header { display: flex; align-items: baseline; gap: 12px; }
-      h1 { font-size: 18px; margin: 0; }
-      .dot {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--muted);
-        vertical-align: middle;
-      }
-      .dot.alive  { background: var(--accent); }
-      .dot.warn   { background: var(--warn); }
-      .dot.err    { background: var(--err); }
-      section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
-      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
-      button {
-        background: var(--accent);
-        color: #04140d;
-        border: 0;
-        border-radius: 6px;
-        padding: 8px 14px;
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-        margin-right: 8px;
-      }
-      button[disabled] { opacity: 0.5; cursor: not-allowed; }
-      button.secondary { background: var(--border); color: var(--fg); }
-      button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-      select, input {
-        background: #06080c;
-        color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 6px 10px;
-        font: inherit;
-        margin-right: 8px;
-      }
-      pre {
-        margin: 0;
-        background: #06080c;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 10px 12px;
-        max-height: 240px;
-        overflow: auto;
-        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-        color: var(--muted);
-      }
-      .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-      .row .kv { display: flex; flex-direction: column; }
-      .row .kv span:first-child { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-      .row .kv span:last-child  { font: 13px ui-monospace, monospace; }
-      .pill { font: 11px ui-monospace, monospace; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
-      .pill.ok { color: var(--accent); border-color: var(--accent); }
-      .pill.warn { color: var(--warn); border-color: var(--warn); }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>bot_budcon</h1>
-        <span id="dot" class="dot" title="engine status"></span>
-        <span id="status-text" style="color: var(--muted)">connecting…</span>
-      </header>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>bot_budcon — AI Control Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#070A14;
+  --panel:#11162A;
+  --panel-2:#151D33;
+  --line:#232946;
+  --line-2:#2A3358;
+  --paper:#F0EDE8;
+  --muted:#8A8FA3;
+  --muted-2:#5A6080;
+  --amber:#FFB800;
+  --amber-dim:rgba(255,184,0,.12);
+  --cyan:#00E5FF;
+  --cyan-dim:rgba(0,229,255,.12);
+  --red:#FF3B30;
+  --green:#00D68F;
+  --radius:14px;
+  --radius-sm:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  font-family:"IBM Plex Sans Thai","Space Grotesk",system-ui,sans-serif;
+  background:
+    radial-gradient(1200px 600px at 70% -10%, rgba(0,229,255,.08), transparent 60%),
+    radial-gradient(900px 500px at 10% 0%, rgba(255,184,0,.06), transparent 60%),
+    var(--void);
+  color:var(--paper);
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button{font:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.display{font-family:"Space Grotesk",sans-serif}
 
-      <section>
-        <h2>Engine</h2>
-        <div class="row">
-          <div class="kv"><span>chromeAlive</span><span id="chromeAlive">—</span></div>
-          <div class="kv"><span>loggedIn</span><span id="loggedIn">—</span></div>
-          <div class="kv"><span>watchActive</span><span id="watchActive">—</span></div>
-          <div class="kv"><span>sensorReady</span><span id="sensorReady">—</span></div>
+/* layout */
+.shell{
+  max-width:1280px;
+  margin:0 auto;
+  padding:18px 16px 32px;
+  display:grid;
+  grid-template-columns: 300px 1fr;
+  gap:16px;
+}
+@media(max-width:980px){ .shell{grid-template-columns:1fr} }
+
+/* header */
+.topbar{
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:14px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+  border:1px solid var(--line);
+  border-radius:16px;
+  backdrop-filter: blur(8px);
+  position:sticky;
+  top:12px;
+  z-index:10;
+}
+.brand{
+  display:flex; align-items:center; gap:12px;
+}
+.orb{
+  width:36px; height:36px; border-radius:50%;
+  background: conic-gradient(from 0deg, var(--cyan), var(--amber), var(--cyan));
+  padding:2px;
+  flex-shrink:0;
+}
+.orb i{
+  display:block; width:100%; height:100%; border-radius:50%;
+  background: var(--void);
+  position:relative;
+  overflow:hidden;
+}
+.orb i::after{
+  content:""; position:absolute; inset:6px;
+  border-radius:50%;
+  background: var(--cyan);
+  box-shadow: 0 0 16px var(--cyan);
+  opacity:.9;
+  animation: breathe 2.2s ease-in-out infinite;
+}
+@keyframes breathe{ 0%,100%{ transform:scale(.92); opacity:.9 } 50%{ transform:scale(1); opacity:1 } }
+.orb.watching i::after{ background:var(--amber); box-shadow:0 0 16px var(--amber) }
+.orb.err i::after{ background:var(--red); box-shadow:0 0 16px var(--red) }
+.brand h1{ margin:0; font-size:17px; font-weight:700; letter-spacing:-.02em; line-height:1 }
+.brand p{ margin:1px 0 0; font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase }
+.topbar .spacer{flex:1}
+.live-pill{
+  display:inline-flex; align-items:center; gap:7px;
+  font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  padding:6px 10px; border-radius:999px;
+  border:1px solid var(--line); background:rgba(255,255,255,.03);
+  color:var(--muted);
+}
+.live-pill .dot2{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.live-pill.on{ color:var(--paper); border-color:rgba(0,229,255,.35); background:var(--cyan-dim)}
+.live-pill.on .dot2{ background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation: breathe 1.4s infinite}
+.live-pill.warn{ border-color:rgba(255,184,0,.35); background:var(--amber-dim); color:var(--paper)}
+.live-pill.warn .dot2{ background:var(--amber)}
+
+/* rail */
+.rail{ display:flex; flex-direction:column; gap:12px; position:sticky; top:78px; align-self:start }
+@media(max-width:980px){ .rail{ position:static } }
+.card{
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.card-h{
+  padding:12px 14px 10px;
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:8px;
+}
+.card-h h2{ margin:0; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600}
+.card-h .eyebrow{ margin-left:auto; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted-2); font-family:"JetBrains Mono",monospace}
+.card-b{ padding:12px 14px }
+.kv2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px }
+.kv{ display:flex; flex-direction:column; gap:2px }
+.kv label{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted) }
+.kv strong{ font-size:13px; font-weight:600; font-family:"JetBrains Mono",monospace; color:var(--paper) }
+.kv strong.muted{ color:var(--muted) }
+.kv strong.amber{ color:var(--amber) }
+.kv strong.cyan{ color:var(--cyan) }
+
+/* status orb row */
+.status-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px }
+.status-item{
+  display:flex; align-items:center; gap:8px;
+  padding:8px 10px; border-radius:10px;
+  background: rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06);
+}
+.status-item .s-dot{ width:8px;height:8px;border-radius:50%; background:var(--muted); flex-shrink:0}
+.status-item.on .s-dot{ background:var(--green); box-shadow:0 0 8px var(--green)}
+.status-item.warn .s-dot{ background:var(--amber); box-shadow:0 0 8px var(--amber)}
+.status-item.off .s-dot{ background:var(--muted)}
+.status-item b{ font-size:12px; font-weight:600}
+.status-item span{ font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase}
+
+/* signal bar - signature element */
+.signal-wrap{ padding:10px 14px 12px; border-top:1px solid var(--line); background: rgba(0,0,0,.18)}
+.signal-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px}
+.signal-head b{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.signal-head i{ margin-left:auto; font-size:11px; font-family:"JetBrains Mono",monospace; color:var(--muted-2); font-style:normal}
+.signal-bar{
+  height:36px; border-radius:8px;
+  background: #0B0F1E;
+  border:1px solid var(--line);
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; padding:0 2px;
+}
+.signal-bar::before{
+  content:""; position:absolute; inset:0;
+  background:
+    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), rgba(255,255,255,.04) calc(100% - 1px)),
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,255,255,.03) 18px 19px);
+  pointer-events:none;
+}
+.pulse{
+  width:3px; height:18px; border-radius:2px; background:var(--cyan);
+  margin:0 1px; opacity:.9; flex-shrink:0;
+  animation: pulseIn .4s ease-out;
+}
+@keyframes pulseIn{ from{ transform:scaleY(.2); opacity:0 } to{ transform:scaleY(1); opacity:.9 } }
+.pulse.hit{ background:var(--amber); box-shadow:0 0 8px var(--amber); height:26px}
+.pulse.miss{ background:var(--line-2); opacity:.5; height:10px}
+.signal-legend{ display:flex; gap:10px; margin-top:6px; font-size:10px; color:var(--muted-2); font-family:"JetBrains Mono",monospace}
+.signal-legend i{ width:8px;height:8px;border-radius:2px; display:inline-block; vertical-align:middle; margin-right:4px}
+.legend-hit i{ background:var(--amber)}
+.legend-ok i{ background:var(--cyan)}
+.legend-miss i{ background:var(--line-2)}
+
+/* main */
+.main{ display:flex; flex-direction:column; gap:12px; min-width:0 }
+
+/* discovery */
+.discovery-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.discovery-head h2{ margin:0; font-size:13px; letter-spacing:.02em}
+.discovery-head p{ margin:0; font-size:12px; color:var(--muted)}
+.btn{
+  appearance:none; border:1px solid var(--line); background: rgba(255,255,255,.04);
+  color:var(--paper); padding:8px 12px; border-radius:999px;
+  font-size:13px; font-weight:600; cursor:pointer;
+  display:inline-flex; align-items:center; gap:7px;
+  transition: all .15s ease;
+}
+.btn:hover{ border-color:var(--line-2); background:rgba(255,255,255,.07); transform:translateY(-1px)}
+.btn:active{ transform:none}
+.btn:disabled{ opacity:.45; cursor:not-allowed; transform:none}
+.btn-primary{ background: var(--paper); color:var(--void); border-color:var(--paper)}
+.btn-primary:hover{ background:#fff}
+.btn-amber{ background:var(--amber); color:#1a1200; border-color:var(--amber)}
+.btn-amber:hover{ filter:brightness(1.05)}
+.btn-ghost{ background:transparent}
+.btn-sm{ padding:6px 10px; font-size:12px}
+.pill{
+  font-size:11px; font-family:"JetBrains Mono",monospace;
+  padding:4px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted);
+  background:rgba(255,255,255,.03)
+}
+.pill.on{ color:var(--cyan); border-color:rgba(0,229,255,.3); background:var(--cyan-dim)}
+.event-grid{
+  display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px;
+}
+@media(max-width:640px){ .event-grid{ grid-template-columns:1fr } }
+.event-card{
+  position:relative;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+  border:1px solid var(--line); border-radius:12px;
+  padding:12px; cursor:pointer;
+  transition: all .15s ease;
+  overflow:hidden;
+}
+.event-card::after{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background: transparent; transition: background .15s;
+}
+.event-card:hover{ border-color:var(--line-2); transform:translateY(-1px)}
+.event-card.active{ border-color: rgba(0,229,255,.4); background: linear-gradient(180deg, var(--cyan-dim), rgba(255,255,255,.02))}
+.event-card.active::after{ background:var(--cyan)}
+.event-card h3{ margin:0 0 4px; font-size:13px; line-height:1.25; font-weight:600; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.event-card .meta{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+.event-card .meta span{ font-size:11px; font-family:"JetBrains Mono",monospace; padding:3px 7px; border-radius:999px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.04); color:var(--muted)}
+.event-card.active .meta span{ border-color:rgba(0,229,255,.2)}
+.event-card .foot{ display:flex; align-items:center; gap:8px; margin-top:8px; font-size:11px; color:var(--muted-2)}
+.event-card .foot i{ width:6px;height:6px;border-radius:50%; background:var(--muted); display:inline-block}
+.event-card .foot i.on{ background:var(--green); box-shadow:0 0 6px var(--green)}
+.event-card .pick{ position:absolute; top:10px; right:10px; width:18px;height:18px; border-radius:50%; border:1px solid var(--line); display:grid; place-items:center; font-size:11px; color:transparent}
+.event-card.active .pick{ background:var(--cyan); border-color:var(--cyan); color:var(--void)}
+.empty{
+  padding:22px; border:1px dashed var(--line); border-radius:12px;
+  background: rgba(255,255,255,.02); text-align:center; color:var(--muted)
+}
+.empty b{ color:var(--paper)}
+.custom-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px}
+.input{
+  background: #0B0F1E; border:1px solid var(--line); color:var(--paper);
+  border-radius:999px; padding:8px 12px; font: inherit; font-size:13px; outline:none;
+  min-width:0;
+}
+.input:focus{ border-color: rgba(0,229,255,.4); box-shadow:0 0 0 3px var(--cyan-dim)}
+.input::placeholder{ color:var(--muted-2)}
+.preview{
+  margin-top:10px; padding:10px 12px; border-radius:12px;
+  background:#0B0F1E; border:1px solid var(--line);
+  font-family:"JetBrains Mono",monospace; font-size:12px; line-height:1.6; color:var(--muted);
+  white-space:pre-wrap; word-break:break-word; min-height:44px;
+}
+
+/* control deck */
+.deck{ display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+@media(max-width:720px){ .deck{ grid-template-columns:1fr } }
+.deck-card{ background: linear-gradient(180deg, var(--panel), #12162B); border:1px solid var(--line); border-radius:14px; overflow:hidden}
+.deck-card .card-h{ background: rgba(255,255,255,.02)}
+.toggle-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.switch{
+  width:44px; height:26px; border-radius:999px; background: var(--line); border:1px solid var(--line-2);
+  position:relative; cursor:pointer; transition: all .2s;
+  flex-shrink:0;
+}
+.switch i{
+  position:absolute; top:2px; left:2px; width:20px;height:20px; border-radius:50%; background:var(--paper);
+  transition: all .2s; box-shadow:0 1px 6px rgba(0,0,0,.4)
+}
+.switch.on{ background: var(--amber); border-color: var(--amber)}
+.switch.on i{ transform:translateX(18px)}
+.switch[aria-disabled="true"]{ opacity:.5; pointer-events:none}
+.zone-grid{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.zone{
+  padding:6px 10px; border-radius:999px; border:1px solid var(--line);
+  background: rgba(255,255,255,.03); font-family:"JetBrains Mono",monospace; font-size:12px;
+  cursor:pointer; transition: all .12s; color:var(--muted);
+}
+.zone:hover{ border-color:var(--line-2); color:var(--paper)}
+.zone.active{ background:var(--paper); color:var(--void); border-color:var(--paper); font-weight:600}
+.zone.sold{ opacity:.35; text-decoration:line-through; cursor:not-allowed}
+.log{
+  font-family:"JetBrains Mono",monospace; font-size:11px; line-height:1.6;
+  background:#070A14; border:1px solid var(--line); border-radius:10px;
+  padding:10px 12px; max-height:220px; overflow:auto; color:var(--muted);
+  white-space:pre-wrap; word-break:break-word;
+}
+.note{ font-size:11px; color:var(--muted); margin-top:8px}
+.note.warn{ color:var(--amber)}
+.note.ok{ color:var(--green)}
+.divider{ height:1px; background: var(--line); margin:10px 0}
+.kbd{ font-family:"JetBrains Mono",monospace; font-size:11px; padding:2px 6px; border-radius:6px; border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--muted)}
+
+/* focus */
+:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; border-radius:6px}
+@media (prefers-reduced-motion: reduce){
+  .orb i::after, .live-pill.on .dot2, .pulse{ animation:none !important}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="orb" id="orb"><i></i></div>
+      <div>
+        <h1 class="display">bot_budcon</h1>
+        <p>AI Control Deck — SiamPic Hall 7F</p>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="live-pill mono" id="livePill"><span class="dot2"></span><span id="liveText">connecting…</span></div>
+  </header>
+
+  <!-- rail -->
+  <aside class="rail">
+    <section class="card" aria-label="System">
+      <div class="card-h"><h2>System</h2><span class="eyebrow mono" id="clock">—:—</span></div>
+      <div class="card-b">
+        <div class="kv2">
+          <div class="kv"><label>chromeAlive</label><strong id="chromeAlive" class="mono">—</strong></div>
+          <div class="kv"><label>loggedIn</label><strong id="loggedIn" class="mono">—</strong></div>
+          <div class="kv"><label>watchActive</label><strong id="watchActive" class="mono">—</strong></div>
+          <div class="kv"><label>sensorReady</label><strong id="sensorReady" class="mono">—</strong></div>
+        </div>
+        <div class="status-grid">
+          <div class="status-item off" id="authItem"><span class="s-dot"></span><div><b id="authLabel">Auth</b><br><span id="authSub" class="mono">checking…</span></div></div>
+          <div class="status-item off" id="watchItem"><span class="s-dot"></span><div><b>Watch</b><br><span id="watchSub" class="mono">idle</span></div></div>
+        </div>
+        <div class="note" id="authDetail" style="margin-top:8px"></div>
+      </div>
+      <div class="signal-wrap">
+        <div class="signal-head"><b class="mono">Signal — polls</b><i id="signalMeta" class="mono">—</i></div>
+        <div class="signal-bar" id="signalBar" aria-label="poll signal"></div>
+        <div class="signal-legend">
+          <span class="legend-hit"><i></i>new zone</span>
+          <span class="legend-ok"><i></i>no change</span>
+          <span class="legend-miss"><i></i>error/empty</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>AI Log</h2><span class="eyebrow mono">last 50</span></div>
+      <div class="card-b" style="padding:10px 12px">
+        <div class="log" id="log">waiting…</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Actions</h2></div>
+      <div class="card-b">
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button id="loginBtn" class="btn btn-primary">🔓 Login invisible</button>
+          <button id="reloginBtn" class="btn btn-ghost btn-sm" disabled>↻ Re-login</button>
+        </div>
+        <p class="note" id="actionNote"></p>
+      </div>
+    </section>
+  </aside>
+
+  <!-- main -->
+  <main class="main">
+    <!-- discovery -->
+    <section class="card">
+      <div class="card-h">
+        <h2>Discovery — real-time</h2>
+        <span class="eyebrow mono" id="discoverEyebrow">no hardcode</span>
+      </div>
+      <div class="card-b">
+        <div class="discovery-head">
+          <div style="flex:1; min-width:220px">
+            <h2 class="display" style="font-size:15px; margin:0 0 2px">Every TTM concert → query</h2>
+            <p class="mono" style="font-size:11px; color:var(--muted)">Scrape <span class="kbd">/concert/</span> → probe <span class="kbd">zones.php?query=&lt;q&gt;</span> ด้วย cookies จริง — ไม่มีรายชื่อฝังในโค้ด</p>
+          </div>
+          <button id="discoverBtn" class="btn btn-primary">↻ Discover now</button>
+          <span class="pill mono" id="discoverPill" style="display:none"></span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; color:var(--muted); font-size:12px">
+          <span class="mono" id="discoverMeta">ยังไม่ discover — กด Discover เพื่อโหลดรายการจริงจาก TTM</span>
+          <span class="mono" id="discoverAge" style="margin-left:auto; color:var(--muted-2)"></span>
+        </div>
+
+        <div id="eventGrid" class="event-grid" style="margin-top:12px"></div>
+        <div id="eventEmpty" class="empty" style="display:none; margin-top:12px"></div>
+
+        <div class="custom-row">
+          <input id="customQuery" class="input mono" placeholder="custom query เช่น 504 / 927 หรือวาง zonesUrl เต็ม" style="flex:1; min-width:200px"/>
+          <button id="previewBtn" class="btn btn-ghost btn-sm">👁 Preview</button>
+        </div>
+        <div id="eventPreview" class="preview">ยังไม่เลือกอีเวนต์ — Discover ก่อน แล้วคลิกการ์ด หรือวาง custom query แล้ว Preview</div>
+        <p class="note">Discover จะยิง <span class="kbd">GET /api/events/discover?limit=30</span> แล้วเติมการ์ด — เลือกการ์ดแล้ว <span class="kbd">🎯 Watch</span> จะใช้ <span class="kbd">zonesUrl</span> ของการ์ดนั้นโดยตรง ไม่มี fallbackMap</p>
+      </div>
+    </section>
+
+    <!-- deck -->
+    <div class="deck">
+      <section class="deck-card" aria-label="Watch">
+        <div class="card-h"><h2>Watch — เฝ้าโซน</h2><span class="eyebrow mono" id="watchPill">idle</span></div>
+        <div class="card-b">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; color:var(--muted)">
+            <span class="mono">polls</span><strong id="watchPolls" class="mono" style="color:var(--paper)">0</strong>
+            <span class="mono">target</span><strong id="watchTarget" class="mono">—</strong>
+            <span class="mono" id="watchAge" style="margin-left:auto; color:var(--muted-2)"></span>
+          </div>
+          <p class="note mono" id="watchDetail" style="margin-top:6px"></p>
+          <p class="note" id="watchEvent" style="color:var(--amber); font-weight:600; min-height:18px"></p>
+
+          <div class="divider"></div>
+
+          <div class="toggle-row">
+            <div class="switch" id="autoSwitch" role="switch" aria-checked="false" tabindex="0" aria-label="auto-book"></div>
+            <div>
+              <div style="font-size:13px; font-weight:600">Auto-book เมื่อเจอโซนใหม่</div>
+              <div class="mono" style="font-size:11px; color:var(--muted)">Watch เจอ <span class="kbd">NEW zone</span> → ยิง <span class="kbd">book</span> เองทันที (qty เดียวกับ Book)</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
+            <button id="watchBtn" class="btn btn-amber" disabled>▶ Watch</button>
+            <button id="stopBtn" class="btn btn-ghost btn-sm" disabled>■ Stop</button>
+          </div>
+          <p class="note warn" id="autoNote" style="display:none"></p>
         </div>
       </section>
 
-      <section>
-        <h2>Auth cookie gate (ticket 10)</h2>
-        <div class="row">
-          <span id="auth-dot" class="dot" title="gate verdict"></span>
-          <span id="auth-text" style="color: var(--muted)">checking…</span>
-          <div class="kv" style="margin-left: auto;"><span>expires in</span><span id="auth-expires">—</span></div>
+      <section class="deck-card" aria-label="Book">
+        <div class="card-h"><h2>Book — จอง</h2><span class="eyebrow mono">humanStep: payment</span></div>
+        <div class="card-b">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <input id="bookQty" type="number" min="1" max="6" value="1" class="input mono" style="width:86px" title="qty"/>
+            <span class="mono" style="font-size:12px; color:var(--muted)">ใบ</span>
+            <span class="mono" id="bookZoneLabel" style="margin-left:auto; font-size:12px; color:var(--muted)">ยังไม่เลือกโซน</span>
+          </div>
+
+          <div class="zone-grid" id="zoneGrid" aria-label="zones"></div>
+          <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
+            <button id="bookBtn" class="btn btn-primary" disabled>◉ Book Now</button>
+            <button id="finalizeBtn" class="btn btn-ghost btn-sm">✓ Finalize after payment</button>
+          </div>
+          <p class="note" id="bookNote"></p>
+          <p class="note" style="margin-top:6px">Book ใช้ <span class="kbd">zonesUrl</span> จากการ์ดที่เลือก — ถ้าเว้นโซนว่างจะใช้ <span class="kbd">lastEvent.code</span> อัตโนมัติ</p>
         </div>
-        <p id="auth-detail" style="color: var(--muted); margin: 8px 0 0; font-size: 12px;"></p>
       </section>
+    </div>
+  </main>
+</div>
 
-      <section>
-        <h2>Watch (ticket 15)</h2>
-        <div class="row">
-          <span id="watch-dot" class="dot" title="watch status"></span>
-          <span id="watch-text" style="color: var(--muted)">idle</span>
-          <div class="kv" style="margin-left: auto;"><span>polls</span><span id="watch-polls">0</span></div>
-          <div class="kv"><span>target</span><span id="watch-target">—</span></div>
-        </div>
-        <p id="watch-detail" style="color: var(--muted); margin: 8px 0 0; font-size: 12px;"></p>
-        <p id="watch-event" style="color: var(--accent); margin: 8px 0 0; font-size: 12px; font-weight: 600;"></p>
-      </section>
+<script>
+const $ = id => document.getElementById(id);
+let lastAuth=null, lastWatch=null, discovered=null, selected=null;
+let discoverAt=0;
+let pulses=[];
 
-      <!-- Generic event discovery -->
-      <section>
-        <h2>Events — generic discovery (supports every TTM concert)</h2>
-        <div class="row" style="margin-bottom: 10px;">
-          <button id="discover-btn" type="button" class="ghost" title="Scrape concert/ and probe zones.php for every query">🔍 Discover events</button>
-          <span id="discover-meta" style="color: var(--muted); font-size: 12px;">—</span>
-          <span id="discover-pill" class="pill" style="display:none;"></span>
-        </div>
-        <div class="row" style="margin-bottom: 10px;">
-          <select id="target-select" title="Pick any TTM event — populated by Discover" style="min-width: 320px; max-width: 100%;">
-            <option value="idol1st">idol1st (504) — fallback</option>
-            <option value="lany">lany — fallback</option>
-            <option value="joji">joji — fallback</option>
-            <option value="babymonster">babymonster — fallback</option>
-            <option value="dreaming">dreaming — fallback</option>
-          </select>
-          <input id="custom-query" type="text" placeholder="custom query (e.g. 504 or 927)" style="width: 200px;" maxlength="32" />
-          <button id="preview-btn" type="button" class="ghost" title="Probe zones/rounds for the custom query without starting Watch">👁 Preview</button>
-        </div>
-        <div class="row" style="margin-bottom: 10px;">
-          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer;">
-            <input id="autobook-check" type="checkbox" /> auto-book when new zone appears
-          </label>
-          <button id="watch-btn" type="button" class="secondary" disabled>🎯 Watch</button>
-          <button id="stop-btn"  type="button" class="secondary" disabled>⏹ Stop</button>
-        </div>
-        <div id="event-preview" style="background:#06080c; border:1px solid var(--border); border-radius:6px; padding:10px 12px; font: 12px/1.5 ui-monospace, monospace; color: var(--muted); min-height: 44px; white-space: pre-wrap; word-break: break-word;">idle — hit 🔍 Discover to load all concert→query mappings, or paste a custom query and hit 👁 Preview.</div>
-        <p style="color: var(--muted); font-size: 11px; margin: 8px 0 0;">Discover ค้นทุก <code>zones.php?query=&lt;q&gt;</code> จากหน้า <code>/concert/</code> แล้ว probe <code>zones.php</code> ตัวจริง (ด้วย cookies) เพื่อโชว์โซน/รอบ/ <code>k</code> — จากนั้น <code>🎯 Watch</code> จะได้ baseline จริง และ <code>🎯 Book Now</code> จะพุ่งไป <code>fixed.php</code> ตรงๆ เพื่อหลีกเลี่ยง <code>errcode=9</code> ของอีเวนต์ที่ยังไม่เปิดขาย (เช่น 504 / 05-06 Sep 2026) โดยไม่ต้องพึ่ง hardcoded 5 รายชื่อ — รองรับทุกอีเวนต์ที่มีปุ่ม “ซื้อบัตร” บน TTM แล้ว</p>
-      </section>
+function fmtAgo(ms){
+  if(!ms) return '—';
+  const s=Math.floor((Date.now()-ms)/1000);
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+function setLive(state, text){
+  const pill=$('livePill'), t=$('liveText'), orb=$('orb');
+  pill.className='live-pill mono '+(state||'');
+  t.textContent=text;
+  orb.className='orb '+(state==='on'?'watching': state==='warn'?'err':'');
+}
+function zonesUrlForSelection(){
+  const custom=$('customQuery').value.trim();
+  if(custom){
+    if(custom.startsWith('http')) return custom;
+    return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query='+encodeURIComponent(custom);
+  }
+  if(selected && selected.zonesUrl) return selected.zonesUrl;
+  return '';
+}
+function renderPreview(){
+  const el=$('eventPreview');
+  if(selected){
+    const zones=(selected.zones||[]).length? selected.zones.join(', ') : '(empty — ยังไม่ปล่อยโซน / ต้อง login)';
+    const rounds=(selected.rounds||[]).length? selected.rounds.join(', ') : '(none)';
+    el.textContent=`selected: ${selected.title}  [${selected.query}]\nslug: ${selected.slug||'—'}\nzonesUrl: ${selected.zonesUrl}\nzones (${(selected.zones||[]).length}): ${zones}\nrounds: ${rounds}\nk: ${selected.k||'—'}\n→ Watch จะ baseline ${(selected.zones||[]).length||'?'} โซน · Book จะไป fixed.php ด้วย Referer`;
+    renderZones(selected.zones||[]);
+    return;
+  }
+  const url=zonesUrlForSelection();
+  if(url){ el.textContent=`pending → zonesUrl: ${url}\nกด 👁 Preview เพื่อเช็ค zones/rounds หรือกด Watch เพื่อ baseline เลย`; renderZones([]); return; }
+  el.textContent='ยังไม่เลือกอีเวนต์ — Discover ก่อน แล้วคลิกการ์ด หรือวาง custom query แล้ว Preview';
+  renderZones([]);
+}
+function renderZones(zones){
+  const grid=$('zoneGrid');
+  const label=$('bookZoneLabel');
+  grid.innerHTML='';
+  if(!zones || !zones.length){
+    label.textContent='ยังไม่เลือกโซน';
+    const d=document.createElement('div');
+    d.className='mono'; d.style.cssText='font-size:11px; color:var(--muted-2)';
+    d.textContent='เลือกอีเวนต์ก่อน โซนจะมาเป็นปุ่มให้จิ้ม';
+    grid.appendChild(d);
+    return;
+  }
+  label.textContent=zones.length+' zones';
+  const current=$('bookQty').dataset.code || '';
+  zones.forEach(code=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='zone'+(code===current?' active':'');
+    b.textContent=code;
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.zone').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      $('bookQty').dataset.code=code;
+      $('bookNote').textContent='เลือก '+code+' แล้ว — กด Book Now ได้เลย';
+      tick(); watchTick();
+    });
+    grid.appendChild(b);
+  });
+}
+function applyDiscovered(events){
+  discovered=events;
+  discoverAt=Date.now();
+  const grid=$('eventGrid'), empty=$('eventEmpty');
+  grid.innerHTML='';
+  if(!events.length){
+    grid.style.display='none';
+    empty.style.display='block';
+    empty.innerHTML='<b>ไม่เจออีเวนต์</b><br><span class="mono" style="font-size:12px">/concert/ ไม่มี zones.php?query= หรือต้อง login ก่อน</span>';
+    return;
+  }
+  grid.style.display='grid';
+  empty.style.display='none';
+  events.forEach(ev=>{
+    const card=document.createElement('div');
+    card.className='event-card'+(selected && selected.zonesUrl===ev.zonesUrl?' active':'');
+    card.tabIndex=0;
+    card.setAttribute('role','button');
+    card.setAttribute('aria-label', ev.title);
+    const zc=(ev.zones||[]).length, rc=(ev.rounds||[]).length;
+    const hasZones=zc>0;
+    card.innerHTML=`
+      <div class="pick">✓</div>
+      <h3>${ev.title}</h3>
+      <div class="meta">
+        <span>[${ev.query}]</span>
+        <span>${zc} zones</span>
+        <span>${rc} rounds</span>
+        ${ev.k?'<span>k ✓</span>':'<span style="opacity:.5">k —</span>'}
+      </div>
+      <div class="foot"><i class="${hasZones?'on':''}"></i><span class="mono">${hasZones?'ready':'empty — upcoming'}</span><span class="mono" style="margin-left:auto">${ev.slug||''}</span></div>
+    `;
+    const choose=()=>{
+      selected=ev;
+      document.querySelectorAll('.event-card').forEach(x=>x.classList.remove('active'));
+      card.classList.add('active');
+      $('customQuery').value='';
+      renderPreview();
+      tick(); watchTick();
+    };
+    card.addEventListener('click', choose);
+    card.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); choose(); }});
+    grid.appendChild(card);
+  });
+  if(events[0] && !selected){
+    selected=events[0];
+    const first=grid.querySelector('.event-card');
+    if(first) first.classList.add('active');
+  }
+  renderPreview();
+}
+function pushPulse(kind){
+  pulses.push({kind, at:Date.now()});
+  if(pulses.length>32) pulses.shift();
+  renderPulses();
+}
+function renderPulses(){
+  const bar=$('signalBar');
+  bar.innerHTML='';
+  if(!pulses.length){
+    const d=document.createElement('div');
+    d.className='mono'; d.style.cssText='font-size:11px; color:var(--muted-2); padding:0 8px';
+    d.textContent='no polls yet — Watch to start';
+    bar.appendChild(d);
+    return;
+  }
+  pulses.forEach(p=>{
+    const d=document.createElement('div');
+    d.className='pulse '+(p.kind==='hit'?'hit': p.kind==='miss'?'miss':'');
+    bar.appendChild(d);
+  });
+}
 
-      <section>
-        <h2>Actions</h2>
-        <div class="row" style="margin-bottom: 10px;">
-          <button id="login-btn" type="button" title="Spawns an invisible (C++-patched) Firefox to bypass Akamai">🔓 Login (invisible)</button>
-          <button id="relogin-btn" type="button" class="secondary" disabled>🔁 Re-login</button>
-        </div>
-        <div class="row">
-          <input id="book-code" type="text" placeholder="zone code (A1)" style="width: 120px;" maxlength="10" />
-          <input id="book-qty" type="number" min="1" max="6" value="1" style="width:72px;" title="qty" />
-          <button id="book-btn" type="button" class="secondary" disabled>🎯 Book Now</button>
-          <button id="finalize-btn" type="button" class="ghost" title="After you finish captcha/3-D Secure in Firefox, click to run finalConfirm">✅ Finalize (after payment)</button>
-          <span style="color: var(--muted); font-size: 11px;">manual — uses last watch event if code blank</span>
-        </div>
-        <p id="autobook-note" style="color: var(--warn); margin: 8px 0 0; font-size: 12px; display:none;"></p>
-        <p id="action-note" style="color: var(--muted); margin: 8px 0 0;"></p>
-      </section>
+async function tick(){
+  try{
+    const r=await fetch('/api/status');
+    if(!r.ok) throw new Error('status '+r.status);
+    const s=await r.json();
+    $('chromeAlive').textContent=String(s.chromeAlive);
+    $('loggedIn').textContent=String(s.loggedIn);
+    $('watchActive').textContent=String(s.watchActive);
+    $('sensorReady').textContent=String(s.sensorReady);
+    // live pill
+    if(!s.sensorReady){ setLive('', 'sensor not ready'); }
+    else if(s.loggedIn && s.watchActive){ setLive('on','watching · logged in'); }
+    else if(s.loggedIn){ setLive('','logged in'); }
+    else if(s.chromeAlive){ setLive('warn','browser ready — login needed'); }
+    else { setLive('','idle'); }
+    // buttons
+    const authOk = lastAuth ? lastAuth.accept : s.loggedIn;
+    $('loginBtn').disabled = s.loggedIn || s.watchActive;
+    $('watchBtn').disabled = !s.loggedIn || s.watchActive;
+    $('stopBtn').disabled = !s.watchActive;
+    const hasZone = !!(lastWatch && lastWatch.lastEvent);
+    const codeTyped = ($('bookQty').dataset.code||'').trim().length>0;
+    $('bookBtn').disabled = !s.loggedIn || (!hasZone && !codeTyped);
+    if(lastAuth && lastAuth.lastRelogin && lastAuth.lastRelogin.lastResult==='in_progress'){
+      $('reloginBtn').disabled=true;
+    } else if(!authOk){ $('reloginBtn').disabled=false; } else { $('reloginBtn').disabled=true; }
+    $('log').textContent=(s.lastLog||[]).slice(-50).join('\n');
+    $('log').scrollTop=$('log').scrollHeight;
+  }catch(e){
+    setLive('warn', 'unreachable ('+e.message+')');
+  }
+}
+async function authTick(){
+  try{
+    const r=await fetch('/api/auth/status');
+    if(!r.ok) throw new Error('auth '+r.status);
+    const g=await r.json();
+    lastAuth=g;
+    const item=$('authItem'), label=$('authLabel'), sub=$('authSub'), detail=$('authDetail');
+    if(g.pill==='ok'){ item.className='status-item on'; label.textContent='Authenticated'; sub.textContent=g.primary||'ttkname'; detail.textContent=`primary=${g.primary||'—'} · auth=${g.authCount} · phase1=${g.phase1Count} · expires ${g.expiresInSec===null?'session': g.expiresInSec<60? g.expiresInSec+'s': Math.floor(g.expiresInSec/60)+'m'}`; detail.className='note ok'; }
+    else if(g.pill==='expiring'){ item.className='status-item warn'; label.textContent='Expiring'; sub.textContent=g.expiresInSec+'s'; detail.textContent=`auth=${g.authCount} · expiring soon`; detail.className='note warn'; }
+    else if(g.lastRelogin && g.lastRelogin.lastResult==='in_progress'){ item.className='status-item warn'; label.textContent='Re-logging'; sub.textContent='…'; detail.textContent='re-login in progress'; }
+    else { item.className='status-item off'; label.textContent=g.reason==='expired'?'Expired': g.reason==='no_phase1'?'No phase1':'Login needed'; sub.textContent=g.reason||'no_auth'; detail.textContent=`auth=${g.authCount} · phase1=${g.phase1Count} · ${g.reason||''}`; detail.className='note'; }
+  }catch(e){
+    $('authItem').className='status-item off';
+    $('authLabel').textContent='Auth unreachable';
+  }
+}
+async function watchTick(){
+  try{
+    const r=await fetch('/api/watch/status');
+    if(!r.ok) throw new Error('watch '+r.status);
+    const w=await r.json();
+    const prevCount = lastWatch ? lastWatch.pollCount : 0;
+    const prevEvent = lastWatch ? lastWatch.lastEvent?.code : null;
+    lastWatch=w;
+    $('watchPolls').textContent=String(w.pollCount??0);
+    $('watchPill').textContent = w.active? 'watching' : w.pollCount>0? 'stopped':'idle';
+    $('watchPill').style.color = w.active? 'var(--amber)' : 'var(--muted)';
+    $('watchItem').className='status-item '+(w.active?'on': w.pollCount?'off':'off');
+    $('watchSub').textContent = w.active? 'polling': w.pollCount? 'stopped':'idle';
+    if(w.url){ try{ $('watchTarget').textContent=new URL(w.url).searchParams.get('query')|| w.url.slice(-18);}catch{ $('watchTarget').textContent=w.url.slice(-18)} } else $('watchTarget').textContent='—';
+    $('watchAge').textContent = w.startedAtMs? fmtAgo(w.startedAtMs)+' · poll #'+w.pollCount : '';
+    if(w.active){
+      const baseline=w.baseline? w.baseline.join(', ') : '…';
+      const lastZones=w.lastZones? w.lastZones.join(', ') : '…';
+      $('watchDetail').textContent=`baseline: ${baseline} · last: ${lastZones}`;
+    } else {
+      if(w.lastError) $('watchDetail').textContent=`last error: ${w.lastError}`;
+      else if(w.baseline) $('watchDetail').textContent=`baseline: ${w.baseline.join(',')} · last: ${(w.lastZones||[]).join(',')}`;
+      else $('watchDetail').textContent='';
+    }
+    if(w.lastEvent){
+      $('watchEvent').textContent=`★ NEW ${w.lastEvent.code} @ ${new Date(w.lastEvent.observedAtMs).toLocaleTimeString()} — ready to Book (auto-book will fire if ON)`;
+      if(w.lastEvent.code !== prevEvent) pushPulse('hit');
+    } else {
+      $('watchEvent').textContent='';
+      if(w.pollCount > prevCount && w.active) pushPulse(w.lastError?'miss':'');
+    }
+    $('signalMeta').textContent = w.pollCount? `polls ${w.pollCount} · ${fmtAgo(w.startedAtMs)}` : 'idle';
+    // book button enable
+    const s={loggedIn: lastAuth? lastAuth.accept : false};
+    const codeTyped=($('bookQty').dataset.code||'').trim().length>0;
+    $('bookBtn').disabled = !s.loggedIn || (!w.lastEvent && !codeTyped);
+  }catch(e){
+    $('watchItem').className='status-item off';
+  }
+}
 
-      <section>
-        <h2>Log</h2>
-        <pre id="log"></pre>
-      </section>
-    </main>
+$('loginBtn').addEventListener('click', async()=>{
+  $('actionNote').textContent='starting login…';
+  try{
+    const r=await fetch('/api/login/start',{method:'POST'});
+    const body=await r.text();
+    $('actionNote').textContent = r.ok? 'login started — complete captcha in Firefox': 'login: '+r.status+' '+body;
+  }catch(e){ $('actionNote').textContent='login error: '+e.message; }
+});
+$('reloginBtn').addEventListener('click', async()=>{
+  $('reloginBtn').disabled=true; $('actionNote').textContent='re-login…';
+  try{
+    const r=await fetch('/api/auth/relogin',{method:'POST'});
+    const body=await r.json();
+    if(body.lastResult==='ok') $('actionNote').textContent='re-login ok';
+    else if(body.lastResult==='in_progress') $('actionNote').textContent='already in progress';
+    else if(body.lastResult==='backoff') $('actionNote').textContent='inside back-off';
+    else $('actionNote').textContent='did not refresh — login manually';
+  }catch(e){ $('actionNote').textContent='re-login error: '+e.message; }
+  finally{ $('reloginBtn').disabled=false; authTick(); }
+});
 
-    <script>
-      const $ = (id) => document.getElementById(id);
-      let lastAuth = null;
-      let lastWatch = null;
-      /** @type {Array<{query:string,slug:string,title:string,zonesUrl:string,zones:string[],rounds:string[],k:string|null}>|null} */
-      let discovered = null;
-      let selectedEvent = null;
+let discovering=false;
+async function doDiscover(){
+  if(discovering) return;
+  discovering=true;
+  const btn=$('discoverBtn'), meta=$('discoverMeta'), pill=$('discoverPill'), age=$('discoverAge');
+  btn.disabled=true; btn.textContent='… discovering';
+  meta.textContent='scraping /concert/ → probing zones.php (20s)…';
+  pill.style.display='none';
+  try{
+    const r=await fetch('/api/events/discover?limit=30');
+    const body=await r.json();
+    if(!r.ok) throw new Error(body.error||('http '+r.status));
+    const events=body.events||[];
+    const warns=body.warnings||[];
+    meta.textContent=`found ${events.length} events from ${body.concertUrl} — ${events.filter(e=>e.zones&&e.zones.length).length} with zones ${warns.length?'· warnings: '+warns.slice(0,2).join(' | '):''}`;
+    pill.textContent=`${events.length} events · ${events.filter(e=>e.zones&&e.zones.length).length} with zones`;
+    pill.className='pill on'; pill.style.display='';
+    age.textContent=fmtAgo(Date.now());
+    discoverAt=Date.now();
+    discovered=events;
+    applyDiscovered(events);
+    $('actionNote').textContent=`discover ok — ${events.length} queries (e.g. ${events.slice(0,3).map(e=>e.query).join(', ')}) — pick a card then Watch`;
+  }catch(e){
+    meta.textContent='discover failed: '+e.message;
+    $('discoverPill').textContent='error'; $('discoverPill').className='pill'; $('discoverPill').style.display='';
+    $('actionNote').textContent='discover error: '+e.message;
+  }finally{
+    btn.disabled=false; btn.textContent='↻ Discover now'; discovering=false;
+  }
+}
+$('discoverBtn').addEventListener('click', doDiscover);
+$('customQuery').addEventListener('input', ()=>{
+  if($('customQuery').value.trim()){ selected=null; document.querySelectorAll('.event-card').forEach(x=>x.classList.remove('active')); }
+  else if(discovered && discovered.length){ /* keep */ }
+  renderPreview(); tick(); watchTick();
+});
+$('previewBtn').addEventListener('click', async()=>{
+  const url=zonesUrlForSelection();
+  if(!url){ $('actionNote').textContent='preview: no query/url'; return; }
+  $('actionNote').textContent='previewing '+url+'…'; $('previewBtn').disabled=true;
+  try{
+    const r=await fetch('/api/events/preview',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+    const body=await r.json();
+    if(!r.ok) throw new Error(body.error||('http '+r.status));
+    const zones=body.zones&&body.zones.length? body.zones.join(', '):'(empty)';
+    const rounds=body.rounds&&body.rounds.length? body.rounds.join(', '):'(none)';
+    $('eventPreview').textContent=`preview [${body.query||'—'}] → ${body.zonesUrl}\nstatus: ${body.status}  loginRedirect: ${body.loginRedirect}\nfinalUrl: ${body.finalUrl}\nzones (${(body.zones||[]).length}): ${zones}\nrounds: ${rounds}\nk: ${body.k||'—'}`+(body.loginRedirect?'\n⚠ zones redirected to signin — Login first':'');
+    if(body.zones&&body.zones.length) renderZones(body.zones);
+    $('actionNote').textContent='preview: '+ (body.zones||[]).length+' zones';
+  }catch(e){ $('actionNote').textContent='preview error: '+e.message; }
+  finally{ $('previewBtn').disabled=false; }
+});
 
-      function zonesUrlForCurrentSelection() {
-        const custom = $('custom-query').value.trim();
-        if (custom) {
-          if (custom.startsWith('http')) return custom;
-          // bare query like "504" or "927"
-          if (/^[A-Za-z0-9_-]+$/.test(custom) && !custom.includes('?')) {
-            return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=' + encodeURIComponent(custom);
-          }
-          return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=' + encodeURIComponent(custom);
-        }
-        if (selectedEvent && selectedEvent.zonesUrl) return selectedEvent.zonesUrl;
-        const sel = $('target-select').value.trim();
-        if (!sel) return '';
-        if (sel.startsWith('http')) return sel;
-        // fallback config key → map to known fallback query
-        const fallbackMap = { idol1st:'504', lany:'927', joji:'joji', babymonster:'524', dreaming:'622' };
-        const q = fallbackMap[sel] ?? sel;
-        if (/^[A-Za-z0-9_-]+$/.test(q) && !q.includes('?')) {
-          return 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=' + encodeURIComponent(q);
-        }
-        return sel;
-      }
+const autoSwitch=$('autoSwitch'), autoNote=$('autoNote');
+function setAuto(on){
+  autoSwitch.classList.toggle('on', on);
+  autoSwitch.setAttribute('aria-checked', String(on));
+  if(on){ autoNote.textContent='auto-book ON — NEW zone จะ book อัตโนมัติ (qty ตาม Book) → ทำ captcha/3-D Secure ใน Firefox แล้วกด ✓ Finalize'; autoNote.style.display=''; }
+  else { autoNote.style.display='none'; }
+}
+autoSwitch.addEventListener('click', ()=> setAuto(!autoSwitch.classList.contains('on')));
+autoSwitch.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); setAuto(!autoSwitch.classList.contains('on')); }});
 
-      function renderEventPreview() {
-        const el = $('event-preview');
-        const url = zonesUrlForCurrentSelection();
-        if (selectedEvent) {
-          const zones = selectedEvent.zones && selectedEvent.zones.length ? selectedEvent.zones.join(', ') : '(empty — event may have no zones yet or needs cookies)';
-          const rounds = selectedEvent.rounds && selectedEvent.rounds.length ? selectedEvent.rounds.join(', ') : '(none)';
-          el.textContent = `selected: ${selectedEvent.title}  [${selectedEvent.query}]`
-            + `\nslug: ${selectedEvent.slug || '—'}`
-            + `\nzonesUrl: ${selectedEvent.zonesUrl}`
-            + `\nzones (${(selectedEvent.zones||[]).length}): ${zones}`
-            + `\nrounds: ${rounds}`
-            + `\nk: ${selectedEvent.k || '—'}`
-            + `\n→ 🎯 Watch will baseline ${ (selectedEvent.zones||[]).length ? selectedEvent.zones.length : '?' } zones; 🎯 Book Now will round→fixed.php (avoid errcode=9 if this event is on-sale)`;
-          return;
-        }
-        if (url) {
-          el.textContent = `pending selection → zonesUrl: ${url}\nHit 👁 Preview to probe zones/rounds, or 🎯 Watch to baseline directly.`;
-          return;
-        }
-        el.textContent = 'idle — hit 🔍 Discover to load all concert→query mappings, or paste a custom query and hit 👁 Preview.';
-      }
+$('watchBtn').addEventListener('click', async()=>{
+  const url=zonesUrlForSelection();
+  if(!url){ $('actionNote').textContent='watch: pick a card or enter custom query'; return; }
+  const autoBook=autoSwitch.classList.contains('on');
+  const qty=Math.max(1, Math.min(6, Number($('bookQty').value)||1));
+  $('actionNote').textContent='starting watch for '+url+(autoBook?` (auto-book ×${qty})`:'')+'…';
+  $('watchBtn').disabled=true;
+  try{
+    const r=await fetch('/api/watch/start',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url, autoBook, quantity: qty})});
+    const body=await r.json();
+    if(r.ok){ $('actionNote').textContent='watch started → '+body.url+(body.autoBook?' · auto-book ON':''); if(body.autoBook) setAuto(true); }
+    else if(r.status===409) $('actionNote').textContent='already active → '+(body.url||'');
+    else if(r.status===401) $('actionNote').textContent='watch refused — '+(body.error||'no_auth')+' — login first';
+    else $('actionNote').textContent='watch: '+r.status+' '+JSON.stringify(body);
+  }catch(e){ $('actionNote').textContent='watch error: '+e.message; }
+  finally{ watchTick(); tick(); }
+});
+$('stopBtn').addEventListener('click', async()=>{
+  $('actionNote').textContent='stopping…';
+  try{
+    const r=await fetch('/api/watch/stop',{method:'POST'});
+    const body=await r.json();
+    $('actionNote').textContent = body.ok? 'watch stopped':'stop: '+JSON.stringify(body);
+    autoNote.style.display='none';
+  }catch(e){ $('actionNote').textContent='stop error: '+e.message; }
+  finally{ watchTick(); tick(); }
+});
 
-      function applyDiscoveredToSelect(events) {
-        const sel = $('target-select');
-        sel.innerHTML = '';
-        for (const ev of events) {
-          const opt = document.createElement('option');
-          opt.value = ev.zonesUrl;
-          const zc = ev.zones ? ev.zones.length : 0;
-          const rc = ev.rounds ? ev.rounds.length : 0;
-          const suffix = (zc === 0 && rc === 0) ? ' (empty — upcoming/needs round)' : ` — ${zc} zones · ${rc} rounds`;
-          opt.textContent = `${ev.title} [${ev.query}]${suffix}`;
-          sel.appendChild(opt);
-        }
-        if (events[0]) {
-          sel.value = events[0].zonesUrl;
-          selectedEvent = events[0];
-        }
-        renderEventPreview();
-      }
+$('bookBtn').addEventListener('click', async()=>{
+  let code=($('bookQty').dataset.code||'').trim().toUpperCase();
+  if(!code && lastWatch && lastWatch.lastEvent) code=lastWatch.lastEvent.code;
+  if(!code){ $('bookNote').textContent='need zone code — pick a zone pill or wait for NEW zone'; return; }
+  const qty=Math.max(1, Math.min(6, Number($('bookQty').value)||1));
+  const zonesUrl=(lastWatch && lastWatch.url)? lastWatch.url : zonesUrlForSelection();
+  if(!zonesUrl){ $('bookNote').textContent='need zonesUrl — pick an event first'; return; }
+  $('bookNote').textContent='booking '+code+' ×'+qty+'…'; $('bookBtn').disabled=true;
+  try{
+    const r=await fetch('/api/book/start',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, zonesUrl, quantity: qty})});
+    const body=await r.json();
+    if(body.humanStep) $('bookNote').textContent='paused at '+body.step+' — complete captcha/payment in Firefox, then hit ✓ Finalize';
+    else if(body.ok) $('bookNote').textContent='book ok: '+JSON.stringify(body);
+    else $('bookNote').textContent='book '+(body.step||'')+': '+(body.error||JSON.stringify(body));
+  }catch(e){ $('bookNote').textContent='book error: '+e.message; }
+  finally{ $('bookBtn').disabled=false; }
+});
+$('finalizeBtn').addEventListener('click', async()=>{
+  $('bookNote').textContent='finalizing…'; $('finalizeBtn').disabled=true;
+  try{
+    const r=await fetch('/api/book/finalize',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+    const body=await r.json();
+    if(body.ok) $('bookNote').textContent='finalize ok — confirmationId='+(body.confirmationId||'—')+' screenshot='+(body.screenshotPath||'—');
+    else $('bookNote').textContent='finalize failed at '+(body.step||'?')+': '+(body.error||JSON.stringify(body));
+  }catch(e){ $('bookNote').textContent='finalize error: '+e.message; }
+  finally{ $('finalizeBtn').disabled=false; }
+});
 
-      async function tick() {
-        try {
-          const r = await fetch('/api/status');
-          if (!r.ok) throw new Error('status ' + r.status);
-          const s = await r.json();
-          $('chromeAlive').textContent = String(s.chromeAlive);
-          $('loggedIn').textContent   = String(s.loggedIn);
-          $('watchActive').textContent = String(s.watchActive);
-          $('sensorReady').textContent = String(s.sensorReady);
-
-          const dot = $('dot');
-          const label = $('status-text');
-          if (!s.sensorReady) {
-            dot.className = 'dot err';
-            label.textContent = 'sensor not ready';
-          } else if (s.loggedIn && s.watchActive) {
-            dot.className = 'dot alive';
-            label.textContent = 'watching';
-          } else if (s.loggedIn) {
-            dot.className = 'dot alive';
-            label.textContent = 'logged in';
-          } else if (s.chromeAlive) {
-            dot.className = 'dot warn';
-            label.textContent = 'browser ready, not logged in';
-          } else {
-            dot.className = 'dot';
-            label.textContent = s.loggedIn ? 'logged in' : 'idle';
-          }
-
-          const authOk = lastAuth ? lastAuth.accept : s.loggedIn;
-          $('login-btn').disabled  = s.loggedIn || s.watchActive;
-          $('watch-btn').disabled  = !s.loggedIn || s.watchActive;
-          $('stop-btn').disabled   = !s.watchActive;
-          const hasZone = !!(lastWatch && lastWatch.lastEvent);
-          const codeTyped = $('book-code').value.trim().length > 0;
-          $('book-btn').disabled = !s.loggedIn || (!hasZone && !codeTyped);
-          if (lastAuth && lastAuth.lastRelogin && lastAuth.lastRelogin.lastResult === 'in_progress') {
-            $('relogin-btn').disabled = true;
-          } else if (!authOk) {
-            $('relogin-btn').disabled = false;
-          } else {
-            $('relogin-btn').disabled = true;
-          }
-
-          const log = $('log');
-          log.textContent = (s.lastLog || []).slice(-50).join('\n');
-          log.scrollTop = log.scrollHeight;
-        } catch (e) {
-          $('status-text').textContent = 'unreachable (' + e.message + ')';
-          $('dot').className = 'dot err';
-        }
-      }
-
-      async function authTick() {
-        const dot = $('auth-dot');
-        const text = $('auth-text');
-        const expiresEl = $('auth-expires');
-        const detailEl = $('auth-detail');
-        try {
-          const r = await fetch('/api/auth/status');
-          if (!r.ok) throw new Error('auth ' + r.status);
-          const g = await r.json();
-          lastAuth = g;
-          if (g.pill === 'ok') {
-            dot.className = 'dot alive';
-            text.textContent = 'Authenticated';
-            text.style.color = 'var(--accent)';
-          } else if (g.pill === 'expiring') {
-            dot.className = 'dot warn';
-            text.textContent = 'Session expiring soon';
-            text.style.color = 'var(--warn)';
-          } else if (g.lastRelogin && g.lastRelogin.lastResult === 'in_progress') {
-            dot.className = 'dot warn';
-            text.textContent = 'Re-logging in…';
-            text.style.color = 'var(--warn)';
-          } else {
-            dot.className = 'dot err';
-            text.textContent = g.reason === 'expired'
-              ? 'Auth cookie expired'
-              : g.reason === 'no_phase1'
-                ? 'Phase-1 cookie missing'
-                : 'Login required';
-            text.style.color = 'var(--err)';
-          }
-          if (g.expiresInSec === null) {
-            expiresEl.textContent = 'session';
-          } else if (g.expiresInSec < 60) {
-            expiresEl.textContent = g.expiresInSec + 's';
-          } else if (g.expiresInSec < 3600) {
-            expiresEl.textContent = Math.floor(g.expiresInSec / 60) + 'm';
-          } else {
-            expiresEl.textContent = Math.floor(g.expiresInSec / 3600) + 'h';
-          }
-          const detailBits = [];
-          if (g.primary) detailBits.push('primary=' + g.primary);
-          detailBits.push('auth=' + g.authCount);
-          detailBits.push('phase1=' + g.phase1Count);
-          if (g.reason) detailBits.push('reason=' + g.reason);
-          detailEl.textContent = detailBits.join(' · ');
-        } catch (e) {
-          dot.className = 'dot err';
-          text.textContent = 'unreachable (' + e.message + ')';
-          text.style.color = 'var(--err)';
-        }
-      }
-
-      async function watchTick() {
-        const dot = $('watch-dot');
-        const text = $('watch-text');
-        const pollsEl = $('watch-polls');
-        const targetEl = $('watch-target');
-        const detailEl = $('watch-detail');
-        const eventEl = $('watch-event');
-        try {
-          const r = await fetch('/api/watch/status');
-          if (!r.ok) throw new Error('watch ' + r.status);
-          const w = await r.json();
-          lastWatch = w;
-          pollsEl.textContent = String(w.pollCount ?? 0);
-          if (w.url) {
-            try { targetEl.textContent = new URL(w.url).searchParams.get('query') || w.url.slice(-30); } catch { targetEl.textContent = w.url.slice(-30); }
-          } else {
-            targetEl.textContent = '—';
-          }
-          if (w.active) {
-            dot.className = 'dot alive';
-            text.textContent = 'Watching';
-            text.style.color = 'var(--accent)';
-            const baseline = w.baseline ? w.baseline.join(',') : '…';
-            const lastZones = w.lastZones ? w.lastZones.join(',') : '…';
-            detailEl.textContent = `baseline: ${baseline} · last: ${lastZones}`;
-          } else {
-            dot.className = 'dot';
-            text.textContent = w.pollCount > 0 ? 'Stopped' : 'Idle';
-            text.style.color = 'var(--muted)';
-            if (w.lastError) detailEl.textContent = `last error: ${w.lastError}`;
-            else if (w.baseline) detailEl.textContent = `baseline: ${w.baseline.join(',')} · last: ${(w.lastZones||[]).join(',')}`;
-            else detailEl.textContent = '';
-          }
-          if (w.lastEvent) {
-            eventEl.textContent = `★ NEW zone ${w.lastEvent.code} @ ${new Date(w.lastEvent.observedAtMs).toLocaleTimeString()} — ready to Book`;
-          } else {
-            eventEl.textContent = '';
-          }
-          const s = { loggedIn: lastAuth ? lastAuth.accept : false, watchActive: w.active };
-          const codeTyped = $('book-code').value.trim().length > 0;
-          $('book-btn').disabled = !s.loggedIn || (!w.lastEvent && !codeTyped);
-        } catch (e) {
-          dot.className = 'dot err';
-          text.textContent = 'unreachable (' + e.message + ')';
-          text.style.color = 'var(--err)';
-        }
-      }
-
-      $('login-btn').addEventListener('click', async () => {
-        $('action-note').textContent = 'starting login…';
-        try {
-          const r = await fetch('/api/login/start', { method: 'POST' });
-          const body = await r.text();
-          $('action-note').textContent = r.ok ? 'login started — complete captcha in Firefox' : ('login: ' + r.status + ' ' + body);
-        } catch (e) {
-          $('action-note').textContent = 'login error: ' + e.message;
-        }
-      });
-
-      $('relogin-btn').addEventListener('click', async () => {
-        $('relogin-btn').disabled = true;
-        $('action-note').textContent = 're-login in progress…';
-        try {
-          const r = await fetch('/api/auth/relogin', { method: 'POST' });
-          const body = await r.json();
-          if (body.lastResult === 'ok') $('action-note').textContent = 're-login succeeded';
-          else if (body.lastResult === 'in_progress') $('action-note').textContent = 're-login already in progress';
-          else if (body.lastResult === 'backoff') $('action-note').textContent = 're-login skipped — inside back-off window';
-          else $('action-note').textContent = 're-login did not refresh auth — complete the captcha manually';
-        } catch (e) {
-          $('action-note').textContent = 're-login error: ' + e.message;
-        } finally {
-          $('relogin-btn').disabled = false;
-          authTick();
-        }
-      });
-
-      $('discover-btn').addEventListener('click', async () => {
-        const btn = $('discover-btn');
-        const meta = $('discover-meta');
-        const pill = $('discover-pill');
-        btn.disabled = true;
-        meta.textContent = 'discovering… (scrapes /concert/ then probes zones.php per query — ~20s)';
-        pill.style.display = 'none';
-        try {
-          const r = await fetch('/api/events/discover?limit=30');
-          const body = await r.json();
-          if (!r.ok) throw new Error(body.error || ('http ' + r.status));
-          discovered = body.events || [];
-          const warns = body.warnings || [];
-          meta.textContent = `found ${discovered.length} events from ${body.concertUrl} — ${discovered.filter(e=>e.zones&&e.zones.length).length} with zones · ${warns.length?('warnings: '+warns.slice(0,2).join(' | ')) : 'no warnings'}`;
-          pill.textContent = `${discovered.length} events · ${discovered.filter(e=>e.zones&&e.zones.length).length} with zones`;
-          pill.className = 'pill ok';
-          pill.style.display = '';
-          if (discovered.length) applyDiscoveredToSelect(discovered);
-          $('action-note').textContent = `discover ok — ${discovered.length} queries (e.g. ${discovered.slice(0,3).map(e=>e.query).join(', ')}) — pick one then 🎯 Watch`;
-        } catch (e) {
-          meta.textContent = 'discover failed: ' + e.message;
-          pill.textContent = 'error';
-          pill.className = 'pill warn';
-          pill.style.display = '';
-          $('action-note').textContent = 'discover error: ' + e.message;
-        } finally {
-          btn.disabled = false;
-        }
-      });
-
-      $('target-select').addEventListener('change', () => {
-        const v = $('target-select').value;
-        if (discovered) {
-          selectedEvent = discovered.find(e => e.zonesUrl === v) || null;
-        } else {
-          selectedEvent = null;
-        }
-        // typing in custom-query overrides select — clear it on change
-        // (keep custom as secondary; Watch prefers custom if non-empty)
-        renderEventPreview();
-        tick(); watchTick();
-      });
-      $('custom-query').addEventListener('input', () => {
-        if ($('custom-query').value.trim()) selectedEvent = null;
-        else if (discovered && $('target-select').value) {
-          selectedEvent = discovered.find(e => e.zonesUrl === $('target-select').value) || null;
-        }
-        renderEventPreview();
-        tick(); watchTick();
-      });
-
-      $('preview-btn').addEventListener('click', async () => {
-        const url = zonesUrlForCurrentSelection();
-        if (!url) { $('action-note').textContent = 'preview: no query/url'; return; }
-        $('action-note').textContent = 'previewing ' + url + '…';
-        $('preview-btn').disabled = true;
-        try {
-          const r = await fetch('/api/events/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
-          const body = await r.json();
-          if (!r.ok) throw new Error(body.error || ('http ' + r.status));
-          const zones = body.zones && body.zones.length ? body.zones.join(', ') : '(empty)';
-          const rounds = body.rounds && body.rounds.length ? body.rounds.join(', ') : '(none)';
-          $('event-preview').textContent = `preview [${body.query || '—'}] → ${body.zonesUrl}\nstatus: ${body.status}  loginRedirect: ${body.loginRedirect}\nfinalUrl: ${body.finalUrl}\nzones (${(body.zones||[]).length}): ${zones}\nrounds: ${rounds}\nk: ${body.k || '—'}`
-            + (body.loginRedirect ? '\n⚠ zones redirected to signin — cookies missing/stale → Login first' : '');
-          if (body.zones && body.zones.length && !$('custom-query').value.trim() && !discovered) {
-            $('action-note').textContent = 'preview ok — ' + body.zones.length + ' zones (rounds: ' + rounds + ') — ready to Watch';
-          } else {
-            $('action-note').textContent = 'preview: ' + (body.zones||[]).length + ' zones';
-          }
-        } catch (e) {
-          $('action-note').textContent = 'preview error: ' + e.message;
-        } finally {
-          $('preview-btn').disabled = false;
-        }
-      });
-
-      $('watch-btn').addEventListener('click', async () => {
-        const url = zonesUrlForCurrentSelection();
-        if (!url) { $('action-note').textContent = 'watch: pick an event or enter a custom query'; return; }
-        const autoBook = $('autobook-check').checked;
-        const qtyRaw2 = $('book-qty').value;
-        const quantity2 = Math.max(1, Math.min(6, Number(qtyRaw2) || 1));
-        $('action-note').textContent = 'starting watch for ' + url + (autoBook ? ` (auto-book ×${quantity2})` : '') + '…';
-        $('watch-btn').disabled = true;
-        try {
-          const r = await fetch('/api/watch/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url, autoBook, quantity: quantity2 }) });
-          const body = await r.json();
-          if (r.ok) {
-            $('action-note').textContent = 'watch started → ' + body.url + (body.autoBook ? ' · auto-book ON' : '');
-            const note = $('autobook-note');
-            if (body.autoBook) { note.textContent = 'auto-book ON — when a NEW zone appears it will book automatically (qty ' + body.quantity + ') → complete captcha/3-D Secure in Firefox then hit ✅ Finalize'; note.style.display = ''; }
-            else { note.style.display = 'none'; }
-          }
-          else if (r.status === 409) $('action-note').textContent = 'watch already active → ' + (body.url||'');
-          else if (r.status === 401) $('action-note').textContent = 'watch refused — ' + (body.error||'no_auth') + ' — login first';
-          else $('action-note').textContent = 'watch: ' + r.status + ' ' + JSON.stringify(body);
-        } catch (e) {
-          $('action-note').textContent = 'watch error: ' + e.message;
-        } finally {
-          watchTick(); tick();
-        }
-      });
-
-      $('stop-btn').addEventListener('click', async () => {
-        $('action-note').textContent = 'stopping watch…';
-        try {
-          const r = await fetch('/api/watch/stop', { method: 'POST' });
-          const body = await r.json();
-          $('action-note').textContent = body.ok ? 'watch stopped' : 'stop: ' + JSON.stringify(body);
-          $('autobook-note').style.display = 'none';
-        } catch (e) {
-          $('action-note').textContent = 'stop error: ' + e.message;
-        } finally {
-          watchTick(); tick();
-        }
-      });
-
-      $('book-btn').addEventListener('click', async () => {
-        let code = $('book-code').value.trim().toUpperCase();
-        if (!code && lastWatch && lastWatch.lastEvent) code = lastWatch.lastEvent.code;
-        if (!code) { $('action-note').textContent = 'book: need zone code'; return; }
-        const qtyRaw = $('book-qty').value;
-        const quantity = Math.max(1, Math.min(6, Number(qtyRaw) || 1));
-        const zonesUrl = (lastWatch && lastWatch.url) ? lastWatch.url : zonesUrlForCurrentSelection();
-        if (!zonesUrl) { $('action-note').textContent = 'book: need zonesUrl (Watch first or pick event)'; return; }
-        $('action-note').textContent = 'booking ' + code + ' ×' + quantity + '…';
-        $('book-btn').disabled = true;
-        try {
-          const r = await fetch('/api/book/start', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code, zonesUrl, quantity }) });
-          const body = await r.json();
-          if (body.humanStep) $('action-note').textContent = 'book paused at ' + body.step + ' — complete captcha/payment in Firefox, then hit ✅ Finalize';
-          else if (body.ok) $('action-note').textContent = 'book ok: ' + JSON.stringify(body);
-          else $('action-note').textContent = 'book ' + (body.step||'') + ': ' + (body.error||JSON.stringify(body));
-        } catch (e) {
-          $('action-note').textContent = 'book error: ' + e.message;
-        } finally {
-          $('book-btn').disabled = false;
-        }
-      });
-
-      $('finalize-btn').addEventListener('click', async () => {
-        $('action-note').textContent = 'finalizing… (running finalConfirm in Firefox)';
-        $('finalize-btn').disabled = true;
-        try {
-          const r = await fetch('/api/book/finalize', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
-          const body = await r.json();
-          if (body.ok) $('action-note').textContent = 'finalize ok — confirmationId=' + (body.confirmationId ?? '—') + ' screenshot=' + (body.screenshotPath ?? '—');
-          else $('action-note').textContent = 'finalize failed at ' + (body.step||'?') + ': ' + (body.error || JSON.stringify(body));
-        } catch (e) {
-          $('action-note').textContent = 'finalize error: ' + e.message;
-        } finally {
-          $('finalize-btn').disabled = false;
-        }
-      });
-
-      $('book-code').addEventListener('input', () => { tick(); watchTick(); });
-
-      renderEventPreview();
-      tick();
-      authTick();
-      watchTick();
-      setInterval(tick, 2000);
-      setInterval(authTick, 2000);
-      setInterval(watchTick, 2000);
-    </script>
-  </body>
+// clock + discover age ticker
+setInterval(()=>{ $('clock').textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit', minute:'2-digit'}); if(discoverAt) $('discoverAge').textContent='updated '+fmtAgo(discoverAt); }, 1000);
+renderPreview(); renderPulses();
+tick(); authTick(); watchTick();
+setInterval(tick, 2000); setInterval(authTick, 2000); setInterval(watchTick, 2000);
+// auto-discover on load (real-time, no hardcode)
+doDiscover();
+setInterval(()=>{ if(!discovering) doDiscover(); }, 30000);
+</script>
+</body>
 </html>

@@ -215,25 +215,27 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
-  // Ticket 15 — watch loop wire
+  // Ticket 15 — watch loop wire (realtime discovery, no hardcode)
   if (req.method === 'POST' && url.pathname === '/api/watch/start') {
     const body = await readJsonBody(req);
     let zonesUrl = typeof body['url'] === 'string' ? (body['url'] as string).trim() : '';
-    const targetKey = typeof body['target'] === 'string' ? (body['target'] as string).trim() : '';
+    const rawTarget = typeof body['target'] === 'string' ? (body['target'] as string).trim() : '';
+    const rawQuery = typeof body['query'] === 'string' ? (body['query'] as string).trim() : '';
     const autoBook = body['autoBook'] === true || body['autoBook'] === 'true';
     const quantityRaw2 = body['quantity'];
     const quantity2 = typeof quantityRaw2 === 'number' && Number.isFinite(quantityRaw2) ? Math.floor(quantityRaw2) : 1;
-    if (!zonesUrl && targetKey) {
-      const t = (config.ttm.targets as Record<string, { event: string; query: string }>)[targetKey];
-      if (!t) {
-        json(res, 400, { error: 'unknown target', target: targetKey });
-        return;
+    // Generic resolution: any string is treated as a TTM query — no map.
+    // Priority: url > query > target. All come from live discover.
+    if (!zonesUrl) {
+      const q = rawQuery || rawTarget;
+      if (q) {
+        if (q.startsWith('http')) zonesUrl = q;
+        else zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(q)}`;
       }
-      zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(t.query)}`;
     }
     if (!zonesUrl) {
-      const t = config.ttm.targets[config.ttm.targetKey];
-      zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(t.query)}`;
+      json(res, 400, { ok: false, error: 'zonesUrl or query required — run Discover first' });
+      return;
     }
     if (!zonesUrl.startsWith('http')) {
       zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(zonesUrl)}`;
