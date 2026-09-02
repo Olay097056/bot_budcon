@@ -151,6 +151,14 @@ button{font:inherit}
 
 /* signal bar - signature element */
 .signal-wrap{ padding:10px 14px 12px; border-top:1px solid var(--line); background: rgba(0,0,0,.18)}
+/* ticket 19 — staleness badge: honest, quiet, never blocking */
+.stale-badge{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:2px 8px; border-radius:999px;
+  font-size:10.5px; color:var(--amber);
+  background:var(--amber-dim); border:1px solid rgba(255,184,0,.25);
+}
+.stale-badge::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--amber); opacity:.8 }
 .signal-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px}
 .signal-head b{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
 .signal-head i{ margin-left:auto; font-size:11px; font-family:"JetBrains Mono",monospace; color:var(--muted-2); font-style:normal}
@@ -385,6 +393,7 @@ button{font:inherit}
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; color:var(--muted); font-size:12px">
           <span class="mono" id="discoverMeta">ยังไม่ discover — กด Discover เพื่อโหลดรายการจริงจาก TTM</span>
+          <span class="stale-badge mono" id="staleBadge" style="display:none"></span>
           <span class="mono" id="discoverAge" style="margin-left:auto; color:var(--muted-2)"></span>
         </div>
 
@@ -723,8 +732,13 @@ async function doDiscover(){
     meta.textContent=`found ${events.length} events from ${body.concertUrl} — ${events.filter(e=>e.zones&&e.zones.length).length} with zones ${warns.length?'· warnings: '+warns.slice(0,2).join(' | '):''}`;
     pill.textContent=`${events.length} events · ${events.filter(e=>e.zones&&e.zones.length).length} with zones`;
     pill.className='pill on'; pill.style.display='';
-    age.textContent=fmtAgo(Date.now());
-    discoverAt=Date.now();
+    age.textContent=fmtAgo(body.fetchedAtMs||Date.now());
+    discoverAt=body.fetchedAtMs||Date.now();
+    // ticket 19 — staleness badge from server warnings (cache line)
+    const stale=warns.find(w=>w.includes('cached discovery')||w.includes('merged cached-only'));
+    const badge=$('staleBadge');
+    if(stale){ badge.textContent=stale.split('—')[0].trim(); badge.style.display=''; badge.title=stale; }
+    else badge.style.display='none';
     discovered=events;
     applyDiscovered(events);
     $('actionNote').textContent=`discover ok — ${events.length} queries (e.g. ${events.slice(0,3).map(e=>e.query).join(', ')}) — pick a card then Watch`;
