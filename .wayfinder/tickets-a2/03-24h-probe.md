@@ -1,7 +1,7 @@
 # A2-3 — 24h stability probe (วัด ≥95% จริง)
 
 **Type**: task
-**Status**: open
+**Status**: doing — initial run DONE (blocked cooling) 2026-09-02 15:33
 **Label**: `wayfinder:task`
 **Depends**: 01 (curl-booking ผลลัพธ์), 02 (ip-hygiene กำหนด rate)
 
@@ -17,3 +17,5 @@
 - รายงานปลายทาง: pass % ต่อ endpoint, deny pattern (ช่วงเวลาไหน deny เยอะ)
 
 **Verify (Destination)**: pass ≥95% ทุก endpoint ตลอด 24 ชม. → map ปิดได้
+
+**Progress 2026-09-02 15:33**: initial `--once` รันแล้ว — `concert 100% (2/2) แต่ zones 0% (0/6) 403 Access Denied` + `discover 12 events แต่ zones 0/12` — IP booking ตก hard deny หลัง baseline 3480/h (ดู `reports/A2-3-24h-probe-initial.md`) → ต้อง cooling 30m แล้ว refresh jar ก่อนรัน 24h จริง (`scripts/a2-3-24h-probe.ts --duration 24h`)

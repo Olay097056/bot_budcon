@@ -1,7 +1,7 @@
 # A2-4 — On-sale day playbook (วัน D ไม่มี deny)
 
 **Type**: task
-**Status**: open
+**Status**: done draft ✅ 2026-09-02 — รอ 24h probe ผ่านจึงล็อค final
 **Label**: `wayfinder:task`
 **Depends**: 01, 02, 03 (ต้องรู้ว่า transport ไหนรอด + rate ปลอดภัย + ผ่าน 24h แล้ว)
 
@@ -16,3 +16,5 @@
 5. **Recovery**: ถ้าโดน deny ยาวทั้งวัน D — แผน B คืออะไร (ยอมรับไม่ได้ = ต้องหาทาง แต่ Q3=A ห้ามจ่าย)
 
 **Outcome**: playbook 1 หน้า ที่ operator อ่านก่อนวัน D และทำตามได้
+
+**Deliverable 2026-09-02**: `reports/A2-4-onsale-playbook.md` — pre-flight 7 ข้อ + silence 30m + curl-first 5 ขั้น (curl/8.0.1 เท่านั้น) + fallback ladder 6 ขั้น (30→600s + circuit 30m) + recovery strict 138/h + tier IDLE/ARMED/BURST + คำสั่ง copy-paste — รอ 24h probe ผ่าน 95% แล้วล็อค final
