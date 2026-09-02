@@ -76,14 +76,15 @@ function good(r: TtmFetchResult): boolean {
 async function wreqTransport(url: string, opts: TtmFetchOpts): Promise<TtmFetchResult> {
   const { BotEngine } = await import('./bot-engine.js');
   const eng = new BotEngine();
-  const cookies = loadCookies();
   const host = new URL(url).host;
-  const ck = buildCookieHeader(cookies, host);
+  const isPublic = isPublicHost(host);
+  const cookies = loadCookies();
+  const ck = isPublic ? '' : buildCookieHeader(cookies, host);
   const r = await eng.fetchViaWreq(url, {
     timeoutMs: opts.timeoutMs ?? 15_000,
     headers: {
       ...(ck ? { Cookie: ck } : {}),
-      ...(opts.referer ?? DEFAULT_REFERER ? { Referer: opts.referer ?? DEFAULT_REFERER } : {}),
+      ...(isPublic ? {} : (opts.referer ?? DEFAULT_REFERER ? { Referer: opts.referer ?? DEFAULT_REFERER } : {})),
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
     },
@@ -93,15 +94,20 @@ async function wreqTransport(url: string, opts: TtmFetchOpts): Promise<TtmFetchR
 
 // --- Transport 2: node fetch (+ optional proxy dispatcher) ---
 
+function isPublicHost(host: string): boolean {
+  return host.startsWith('www.');
+}
+
 async function nodeFetchTransport(url: string, opts: TtmFetchOpts): Promise<TtmFetchResult> {
-  const cookies = loadCookies();
   const host = new URL(url).host;
-  const ck = buildCookieHeader(cookies, host);
+  const isPublic = isPublicHost(host);
+  const cookies = loadCookies();
+  const ck = isPublic ? '' : buildCookieHeader(cookies, host);
   const headers: Record<string, string> = {
     ...(ck ? { Cookie: ck } : {}),
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'th,en-US;q=0.9,en;q=0.8',
-    Referer: opts.referer ?? DEFAULT_REFERER,
+    ...(isPublic ? {} : { Referer: opts.referer ?? DEFAULT_REFERER }),
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
   };
   let dispatcher: unknown = undefined;

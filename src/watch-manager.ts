@@ -135,7 +135,8 @@ export class WatchManager {
     this._bookingInFlight = false;
 
     const fetcher = opts.fetcher ?? defaultFetcher;
-    const intervalMs = opts.intervalMs ?? 5000;
+    const baseMs = Number(process.env.BOT_BUDCON_WATCH_MS ?? '') || 15_000;
+    const intervalMs = opts.intervalMs ?? baseMs;
 
     this._log(`watch start → ${url}`);
 

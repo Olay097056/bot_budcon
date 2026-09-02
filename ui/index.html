@@ -711,7 +711,7 @@ async function doDiscover(){
   meta.textContent='กำลังดึงรายการจาก TTM (ใช้เวลา ~20 วิ)…';
   pill.style.display='none';
   try{
-    const r=await fetch('/api/events/discover?limit=30');
+    const r=await fetch('/api/events/discover?limit=12');
     const body=await r.json();
     if(!r.ok) throw new Error(body.error||('http '+r.status));
     const events=body.events||[];
@@ -861,9 +861,9 @@ setInterval(()=>{ $('clock').textContent=new Date().toLocaleTimeString('th-TH',{
 renderPreview(); renderPulses();
 tick(); authTick(); watchTick();
 setInterval(tick, 2000); setInterval(authTick, 2000); setInterval(watchTick, 2000);
-// auto-discover on load (real-time, no hardcode)
+// auto-discover on load (real-time, no hardcode) — every 5m with ±20% jitter ( hygiene ticket A2-2 )
 doDiscover();
-setInterval(()=>{ if(!discovering) doDiscover(); }, 30000);
+(function scheduleNext(){ const j=0.8+0.4*Math.random(); setTimeout(()=>{ if(!discovering) doDiscover(); scheduleNext(); }, Math.round(300_000*j)); })();
 </script>
 </body>
 </html>
