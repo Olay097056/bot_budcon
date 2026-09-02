@@ -25,13 +25,14 @@
  */
 import { loadCookies, buildCookieHeader } from './cookies.js';
 import { config } from './config.js';
+import { curlTransport } from './ttm-curl.js';
 
 export interface TtmFetchResult {
   status: number;
   body: string;
   finalUrl?: string;
   /** Which transport produced this result. */
-  via: 'wreq' | 'fetch' | 'browser';
+  via: 'curl' | 'wreq' | 'fetch' | 'browser';
 }
 
 export interface TtmFetchOpts {
@@ -44,6 +45,7 @@ export interface TtmFetchOpts {
 export type TtmTransport = (url: string, opts: TtmFetchOpts) => Promise<TtmFetchResult>;
 
 export interface TtmFetchDeps {
+  curl?: TtmTransport;
   wreq?: TtmTransport;
   nodeFetch?: TtmTransport;
   browser?: TtmTransport;
@@ -168,6 +170,7 @@ export async function ttmFetch(
   deps: TtmFetchDeps = {},
 ): Promise<TtmFetchResult> {
   const chain: TtmTransport[] = [
+    deps.curl ?? curlTransport as unknown as TtmTransport,
     deps.wreq ?? wreqTransport,
     deps.nodeFetch ?? nodeFetchTransport,
     deps.browser ?? browserTransport,

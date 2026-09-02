@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ttmFetch, isSoftBlocked, hardenedFetcher } from '../src/ttm-fetch.js';
 
-const ok = (body = '<html>zones</html>', via: 'wreq' | 'fetch' | 'browser' = 'wreq'): { status: number; body: string; finalUrl?: string; via: 'wreq' | 'fetch' | 'browser' } =>
+const ok = (body = '<html>zones</html>', via: 'curl' | 'wreq' | 'fetch' | 'browser' = 'wreq'): { status: number; body: string; finalUrl?: string; via: 'curl' | 'wreq' | 'fetch' | 'browser' } =>
   ({ status: 200, body, via });
 
 describe('isSoftBlocked', () => {
@@ -26,13 +26,15 @@ describe('isSoftBlocked', () => {
 });
 
 describe('ttmFetch chain', () => {
-  it('returns first good transport (wreq) without trying others', async () => {
+  it('returns first good transport (curl) without trying others', async () => {
+    const curl = vi.fn(async () => ok('via curl', 'curl'));
     const wreq = vi.fn(async () => ok());
     const nodeFetch = vi.fn(async () => ok());
     const browser = vi.fn(async () => ok());
-    const r = await ttmFetch('https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', {}, { wreq, nodeFetch, browser });
-    expect(r.via).toBe('wreq');
-    expect(wreq).toHaveBeenCalledTimes(1);
+    const r = await ttmFetch('https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', {}, { curl, wreq, nodeFetch, browser });
+    expect(r.via).toBe('curl');
+    expect(curl).toHaveBeenCalledTimes(1);
+    expect(wreq).not.toHaveBeenCalled();
     expect(nodeFetch).not.toHaveBeenCalled();
     expect(browser).not.toHaveBeenCalled();
   });
