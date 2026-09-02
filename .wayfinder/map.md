@@ -38,6 +38,7 @@ A TTM booking bot that is **Akamai-stable in every step** (concert discovery, zo
 - [Self-hosted a7ca5dd — free bypass via home IP](.github/workflows/discover-selfhosted.yml + scripts/setup-selfhosted-runner.bat): `runs-on: self-hosted`, commits `cache/discover-cache.json` so cloud can hydrate for free.
 - [Launcher 58f4d43 — one-click keep](run_here.bat): 4 lines deps→playwright→open→server, no proxy prompt. Q4=A enforced.
 - [Close ticket 16 — Akamai audit](tickets/16-akamai-audit.md): Audited 11 HTTP touchpoints at ebacbfa. HARDENED 6 (discover fetch+fallback, book goto/fixed, login), PARTIAL 1 (preview cache-only), VULNERABLE 2 (watch.ts raw fetch + watch-manager), UNUSED 1 (wreq-js). Decision: ticket 17 must unify watch/preview onto hardened discover path; no raw fetch to TTM.
+- [Close ticket 17 — unified hardened fetcher](src/ttm-fetch.ts): One chain `wreq-js → node fetch (+ProxyAgent) → Playwright browser` with soft-block detection (403/429/503, waf-verify, Access Denied, signin meta-refresh) wired into discover, watch, watch-manager, preview. 11 new tests, 104/104 GREEN, commit `beb473d`. Live-verified after fresh login: discover returns NEW events (query 650 + 927) not in cache, preview warnings empty — realtime restored. Key learning: when PHPSESSID dies server-side (71-byte signin bounce on every transport), the cure is invisible-login re-run, not fingerprint tricks; Akamai now 403s plain curl/playwright on some endpoints but the logged-in browser chain passes.
 
 ## Not yet specified
 
