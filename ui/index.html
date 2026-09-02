@@ -656,13 +656,23 @@ async function watchTick(){
     $('watchPolls').textContent=String(w.pollCount??0);
     const st=$('watchStatus');
     st.className='watch-status '+(w.active?'on':'');
-    $('watchStatusText').textContent = w.active? `กำลังเฝ้ารอ — ตรวจแล้ว ${w.pollCount} ครั้ง` : w.pollCount>0? 'หยุดเฝ้ารอแล้ว':'ยังไม่เริ่ม — เลือกงานแสดงแล้วกดปุ่มด้านล่าง';
+    if(w.circuitOpen){
+      st.className='watch-status';
+      $('watchStatusText').textContent = '⛔ circuit open — IP cooling 30 นาที (fail '+w.consecFail+')';
+      $('watchStatusText').style.color='var(--red)';
+    } else if(w.degraded){
+      $('watchStatusText').textContent = w.active? `กำลังเฝ้ารอ — degraded (fail ${w.consecFail}) หน่วง ${Math.round(w.consecFail>=4?300:60)}s` : 'degraded — ต้องกดเริ่มใหม่';
+      $('watchStatusText').style.color='var(--amber)';
+    } else {
+      $('watchStatusText').style.color='';
+      $('watchStatusText').textContent = w.active? `กำลังเฝ้ารอ — ตรวจแล้ว ${w.pollCount} ครั้ง` : w.pollCount>0? 'หยุดเฝ้ารอแล้ว':'ยังไม่เริ่ม — เลือกงานแสดงแล้วกดปุ่มด้านล่าง';
+    }
     if(w.url){ try{ $('watchZoneLine').textContent='กำลังเฝ้า: '+(new URL(w.url).searchParams.get('query')|| w.url.slice(-18));}catch{ $('watchZoneLine').textContent=w.url.slice(-18)} } else $('watchZoneLine').textContent='';
     $('watchMeta').textContent = w.startedAtMs? fmtAgo(w.startedAtMs):'';
     if(w.active){
-      $('watchDetail').textContent=`baseline: ${w.baseline? w.baseline.join(', '):'…'}`;
+      $('watchDetail').textContent=`baseline: ${w.baseline? w.baseline.join(', '):'…'}${w.consecFail? ' · fail#'+w.consecFail:''}${w.degraded?' · degraded':''}`;
     } else {
-      $('watchDetail').textContent = w.lastError? `ข้อผิดพลาดล่าสุด: ${w.lastError}`:'';
+      $('watchDetail').textContent = w.circuitOpen? `circuit open — fail#${w.consecFail} ต้องรอ 30 นาทีหรือกดเริ่มใหม่` : w.lastError? `ข้อผิดพลาดล่าสุด: ${w.lastError}${w.consecFail? ' (fail#'+w.consecFail+')':''}`:'';
     }
     if(w.lastEvent){
       $('hitBanner').classList.add('show');

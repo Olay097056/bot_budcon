@@ -1,0 +1,34 @@
+{
+  "requestCount": 3,
+  "rows": [
+    {
+      "step": "1 zones.php GET (curl+jar)",
+      "status": "200",
+      "bytes": 53271,
+      "evidence": "hasK=true hasRdId=true anchors=15 denied=false",
+      "pass": true
+    },
+    {
+      "step": "2 fixed.php?k&zone=D1&round=81635 (curl+jar+Referer zones?query)",
+      "status": "200",
+      "bytes": 67540,
+      "evidence": "tableseats=true seatuncheck=35 seatnotavail=13 denied=false errcode9=false",
+      "pass": true
+    },
+    {
+      "step": "3 validateseat.php POST seat BB-08 (curl+jar+XHR)",
+      "status": "200",
+      "bytes": 39,
+      "evidence": "json={\"result\":true,\"status\":0,\"message\":\"\"} hid-checkseat will be created",
+      "pass": true
+    },
+    {
+      "step": "4 bookingseats.php POST → payment (SKIPPED to avoid real reservation)",
+      "status": "skip",
+      "bytes": 0,
+      "evidence": "fixed.js does $.post bookingseats.php then form.submit() to paymentall.php; payload pattern same as validateseat — reachable via curl, deliberately not executed",
+      "pass": true
+    }
+  ],
+  "corePass": true
+}

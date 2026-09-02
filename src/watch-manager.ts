@@ -16,7 +16,7 @@
  */
 
 import { parseZones, type ZoneMatch } from './zones.js';
-import { hardenedFetcher } from './ttm-fetch.js';
+import { hardenedFetcher, isSoftBlocked } from './ttm-fetch.js';
 
 export interface WatchManagerStatus {
   active: boolean;
@@ -27,6 +27,18 @@ export interface WatchManagerStatus {
   lastZones: string[] | null;
   lastEvent: { code: string; href: string; observedAtMs: number } | null;
   lastError: string | null;
+  consecFail: number;
+  consecOk: number;
+  degraded: boolean;
+  circuitOpen: boolean;
+}
+
+function backoffFor(failCount: number, baseMs: number): number {
+  const table = [baseMs, 30_000, 60_000, 120_000, 300_000, 600_000];
+  const base = table[Math.min(failCount, table.length - 1)] ?? 600_000;
+  // jitter 0.85..1.15 to avoid thundering herd across tabs
+  const jitter = base * (0.85 + 0.30 * Math.random());
+  return Math.round(jitter);
 }
 
 export interface WatchManagerStartOpts {
@@ -79,6 +91,9 @@ export class WatchManager {
   private _quantity = 1;
   private _onNewZone: ((code: string, href: string) => void | Promise<void>) | null = null;
   private _bookingInFlight = false;
+  private _consecFail = 0;
+  private _consecOk = 0;
+  private _circuitOpen = false;
 
   constructor(private readonly _log: LogFn = () => {}) {}
 
@@ -92,6 +107,10 @@ export class WatchManager {
       lastZones: this._lastZones ? [...this._lastZones] : null,
       lastEvent: this._lastEvent ? { ...this._lastEvent } : null,
       lastError: this._lastError,
+      consecFail: this._consecFail,
+      consecOk: this._consecOk,
+      degraded: this._consecFail >= 4,
+      circuitOpen: this._circuitOpen,
     };
   }
 
@@ -133,6 +152,9 @@ export class WatchManager {
     this._quantity = typeof opts.quantity === 'number' && opts.quantity > 0 ? Math.floor(opts.quantity) : 1;
     this._onNewZone = opts.onNewZone ?? null;
     this._bookingInFlight = false;
+    this._consecFail = 0;
+    this._consecOk = 0;
+    this._circuitOpen = false;
 
     const fetcher = opts.fetcher ?? defaultFetcher;
     const baseMs = Number(process.env.BOT_BUDCON_WATCH_MS ?? '') || 15_000;
@@ -183,26 +205,57 @@ export class WatchManager {
       let body = '';
       let status = 0;
       let ok = false;
+      let blocked = false;
       try {
         const res = await fetcher(url);
         status = res.status;
         body = res.body;
-        ok = status >= 200 && status < 300;
-        if (!ok) this._lastError = `http ${status}`;
+        blocked = isSoftBlocked({ status, body });
+        ok = status >= 200 && status < 300 && !blocked;
+        if (!ok) this._lastError = blocked ? `soft-block http ${status}` : `http ${status}`;
         else this._lastError = null;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         this._lastError = msg;
         this._log(`watch poll #${pollN}: fetch error ${msg}`);
-        await sleep(intervalMs);
+        this._consecFail++;
+        this._consecOk = 0;
+        const isHard = true;
+        const backoff = backoffFor(this._consecFail, intervalMs);
+        const tag = isHard ? 'hard' : 'soft';
+        this._log(`watch backoff ${backoff}ms (fail#${this._consecFail} ${tag})`);
+        if (this._consecFail >= 5) this._log('watch degraded — IP cooling');
+        if (this._consecFail >= 8) {
+          this._circuitOpen = true;
+          this._log('circuit open — IP cooling 30m (8 consecutive failures)');
+          this._active = false;
+          return;
+        }
+        await sleep(backoff);
         continue;
       }
 
       if (!ok) {
-        this._log(`watch poll #${pollN}: http ${status} — retry`);
-        await sleep(intervalMs);
+        this._consecFail++;
+        this._consecOk = 0;
+        const isHard = status === 403 || status === 429 || status === 503 || body.includes('Access Denied') || body.includes('Reference #');
+        const backoff = backoffFor(this._consecFail, intervalMs);
+        const tag = isHard ? 'hard' : 'soft';
+        this._log(`watch poll #${pollN}: ${blocked ? 'soft-block' : `http ${status}`} — backoff ${backoff}ms (fail#${this._consecFail} ${tag})`);
+        if (this._consecFail >= 5) this._log('watch degraded — IP cooling');
+        if (this._consecFail >= 8) {
+          this._circuitOpen = true;
+          this._log('circuit open — IP cooling 30m (8 consecutive failures)');
+          this._active = false;
+          return;
+        }
+        await sleep(backoff);
         continue;
       }
+
+      // success — track consecutive successes and reset fail counter after 5
+      this._consecOk++;
+      if (this._consecOk >= 5) this._consecFail = 0;
 
       const zones = parseZones(body);
       const codes = zones.map((z) => z.code);

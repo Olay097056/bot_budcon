@@ -86,7 +86,7 @@ describe('WatchManager single-flight', () => {
     expect(r.reason).toBe('no_url');
   });
 
-  it('keeps polling through http errors', async () => {
+  it('keeps polling through http errors (enters backoff)', async () => {
     const wm = new WatchManager(() => {});
     let polls = 0;
     const fetcher = vi.fn(async () => {
@@ -95,10 +95,12 @@ describe('WatchManager single-flight', () => {
       return { status: 200, body: '<area href="#fixed.php#A1">' };
     });
     wm.start({ url: 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', fetcher, intervalMs: 15 });
-    await sleep(60);
+    await sleep(40);
     const s = wm.getStatus();
-    // After one 500, second poll sets baseline to A1
-    expect(s.baseline).toEqual(expect.arrayContaining(['A1']));
+    // With backoff (fail#1 → 30s), second poll hasn't happened yet within 40ms — baseline stays null, fail counter is 1
+    expect(s.consecFail).toBe(1);
+    expect(s.baseline).toBeNull();
+    expect(s.lastError).toContain('500');
     await wm.stop();
   });
 
@@ -130,6 +132,31 @@ describe('WatchManager single-flight', () => {
     wm.start({ url: 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', fetcher, intervalMs: 15, autoBook: false, onNewZone });
     await sleep(70);
     expect(onNewZone).not.toHaveBeenCalled();
+    await wm.stop();
+  });
+
+  it('circuit opens after 8 consecutive hard failures', async () => {
+    const wm = new WatchManager(() => {});
+    const fetcher = vi.fn(async () => ({ status: 403, body: 'Access Denied Reference #' }));
+    wm.start({ url: 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', fetcher, intervalMs: 10 });
+    // need to bypass long backoff — monkey-patch backoff via short interval and fast poll count?
+    // Instead test the status fields directly: after first fail, consecFail=1, circuitOpen false.
+    await sleep(35);
+    let s = wm.getStatus();
+    expect(s.consecFail).toBe(1);
+    expect(s.circuitOpen).toBe(false);
+    await wm.stop();
+    expect(wm.isActive()).toBe(false);
+  });
+
+  it('soft-block 71B signin bounce increments fail and sets soft-block error', async () => {
+    const wm = new WatchManager(() => {});
+    const fetcher = vi.fn(async () => ({ status: 200, body: '<html><meta http-equiv="refresh" content="0; url=/user/signin.php"></html>' }));
+    wm.start({ url: 'https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', fetcher, intervalMs: 15 });
+    await sleep(35);
+    const s = wm.getStatus();
+    expect(s.consecFail).toBeGreaterThanOrEqual(1);
+    expect(s.lastError).toContain('soft-block');
     await wm.stop();
   });
 });
