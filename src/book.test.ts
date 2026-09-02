@@ -89,22 +89,43 @@ describe('selectQuantity()', () => {
 
 describe('confirmSeats()', () => {
   it('clicks the confirm button (any candidate)', async () => {
-    const btn = { click: vi.fn(async () => undefined) };
+    const btn = {
+      click: vi.fn(async () => undefined),
+      isVisible: vi.fn(async () => true),
+    };
     const page = pageWithElement({
       'button[name="confirm"]': btn,
     });
-    // stub other deps
+    // stub other deps + $$ (empty: fallback walks nothing)
     (page as unknown as Record<string, unknown>).content = vi.fn(async () => '<html>ok</html>');
     (page as unknown as Record<string, unknown>).url = vi.fn(() => 'https://booking.thaiticketmajor.com/booking/3m/fixed.php');
+    (page as unknown as Record<string, unknown>).$$ = vi.fn(async () => []);
     const r = await confirmSeats(page as never);
     expect(r.ok).toBe(true);
     expect(btn.click).toHaveBeenCalledOnce();
+  });
+
+  it('skips hidden candidates and clicks a visible fallback', async () => {
+    // E2E regression: #booknow exists but display:none until seats validated.
+    const hidden = { click: vi.fn(async () => undefined), isVisible: vi.fn(async () => false) };
+    const visible = { click: vi.fn(async () => undefined), isVisible: vi.fn(async () => true) };
+    const page = pageWithElement({
+      '#booknow': hidden,
+    });
+    (page as unknown as Record<string, unknown>).content = vi.fn(async () => '<html>ok</html>');
+    (page as unknown as Record<string, unknown>).url = vi.fn(() => 'https://booking.thaiticketmajor.com/booking/3m/fixed.php');
+    (page as unknown as Record<string, unknown>).$$ = vi.fn(async () => [visible]);
+    const r = await confirmSeats(page as never);
+    expect(r.ok).toBe(true);
+    expect(hidden.click).not.toHaveBeenCalled();
+    expect(visible.click).toHaveBeenCalledOnce();
   });
 
   it('returns error when no confirm button exists', async () => {
     const page = pageWithElement({});
     (page as unknown as Record<string, unknown>).content = vi.fn(async () => '<html>no btn</html>');
     (page as unknown as Record<string, unknown>).url = vi.fn(() => 'https://booking.thaiticketmajor.com/booking/3m/fixed.php');
+    (page as unknown as Record<string, unknown>).$$ = vi.fn(async () => []);
     const r = await confirmSeats(page as never);
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/no confirm button/);
