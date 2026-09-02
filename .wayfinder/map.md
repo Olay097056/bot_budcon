@@ -41,10 +41,10 @@ A TTM booking bot that is **Akamai-stable in every step** (concert discovery, zo
 - [Close ticket 17 — unified hardened fetcher](src/ttm-fetch.ts): One chain `wreq-js → node fetch (+ProxyAgent) → Playwright browser` with soft-block detection (403/429/503, waf-verify, Access Denied, signin meta-refresh) wired into discover, watch, watch-manager, preview. 11 new tests, 104/104 GREEN, commit `beb473d`. Live-verified after fresh login: discover returns NEW events (query 650 + 927) not in cache, preview warnings empty — realtime restored. Key learning: when PHPSESSID dies server-side (71-byte signin bounce on every transport), the cure is invisible-login re-run, not fingerprint tricks; Akamai now 403s plain curl/playwright on some endpoints but the logged-in browser chain passes.
 - [Close ticket 18 — cache backbone](src/discover-cache.ts + src/cache-sync.ts): Two layers (local data dir → committed cache/), merge-with-cache (live wins per query, cached-only tops up short results with staleness line), seed-on-cold-start, auto commit-back after successful discover (live-verified: f896cda auto-commit). 12 tests, 116/116 GREEN, commit `51b8a13`.
 - [Close ticket 20 — run_here zero-friction audit](src/server.ts): Startup chain folded hidden steps into server listen: stale lock auto-remove, cache seed from repo, background warm-up discover (first UI paint has data). Cold start verified live. 115/115 GREEN, commit `10c2e21`. Remaining human steps: double-click + captcha only.
+- [Close ticket 19 — Akamai UX staleness badge](ui/index.html): Amber `.stale-badge` in Discovery header shown only on cache warnings (full line in tooltip), `updated Xm ago` from server `fetchedAtMs`, no extra retry button (silent retry via startup warm-up + hardened chain; `↻ Discover now` is the manual retry). Live-verified in Deck: 19 realtime events, badge hidden when fresh. Commit `258796e`.
 
 ## Not yet specified
 
-- How to surface staleness (cache age) in the AI Control Deck without adding UI friction to the one-click flow.
 - Whether login's Firefox profile can be reused to warm the discover cache on first run (cold-start without prior cache).
 
 ## Out of scope
