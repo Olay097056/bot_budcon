@@ -2,8 +2,8 @@
 
 **Map label**: `wayfinder:map`
 **Started**: 2026-08-28
-**Updated**: 2026-09-01 — Akamai-stable destination (Q1=C Q2=C Q3=A Q4=A)
-**Status**: charting — Akamai stability frontier
+**Updated**: 2026-09-01 — Akamai-stability map COMPLETE (16-21 all closed, frontier clear)
+**Status**: destination reached — Akamai-stable, free-only, one-click
 
 ## Destination
 
@@ -42,10 +42,11 @@ A TTM booking bot that is **Akamai-stable in every step** (concert discovery, zo
 - [Close ticket 18 — cache backbone](src/discover-cache.ts + src/cache-sync.ts): Two layers (local data dir → committed cache/), merge-with-cache (live wins per query, cached-only tops up short results with staleness line), seed-on-cold-start, auto commit-back after successful discover (live-verified: f896cda auto-commit). 12 tests, 116/116 GREEN, commit `51b8a13`.
 - [Close ticket 20 — run_here zero-friction audit](src/server.ts): Startup chain folded hidden steps into server listen: stale lock auto-remove, cache seed from repo, background warm-up discover (first UI paint has data). Cold start verified live. 115/115 GREEN, commit `10c2e21`. Remaining human steps: double-click + captcha only.
 - [Close ticket 19 — Akamai UX staleness badge](ui/index.html): Amber `.stale-badge` in Discovery header shown only on cache warnings (full line in tooltip), `updated Xm ago` from server `fetchedAtMs`, no extra retry button (silent retry via startup warm-up + hardened chain; `↻ Discover now` is the manual retry). Live-verified in Deck: 19 realtime events, badge hidden when fresh. Commit `258796e`.
+- [Close ticket 21 — runner tokenless one-click](scripts/setup-selfhosted-runner.bat): YES — `gh api -X POST repos/…/registration-token` mints the 1h token from the logged-in gh session (POST not GET was the trap; repo scope suffices). Both setup scripts rewritten to fetch token + download + configure + run with zero copy-paste. One-time prerequisite: gh installed + `gh auth login`. Service install remains optional admin step.
 
 ## Not yet specified
 
-- Whether login's Firefox profile can be reused to warm the discover cache on first run (cold-start without prior cache).
+- (none — frontier clear; Akamai-stability destination reached)
 
 ## Out of scope
 
