@@ -239,10 +239,12 @@ export async function discoverEvents(opts: {
   // Ticket 18: cache-or-merge — persist every successful live discover,
   // and when live comes up empty/short, merge cached events into the gaps
   // (live wins per query). Staleness is surfaced, never hidden.
+  const totalLiveZones = events.reduce((a,e)=>a+e.zones.length,0);
   const liveResult: DiscoverResult = { fetchedAtMs: Date.now(), concertUrl, events, warnings: [...warnings] };
-  if (events.length > 0) {
+  const shouldSave = events.length > 0 && (totalLiveZones > 0 || warnings.length === 0);
+  if (shouldSave) {
     saveDiscoverCache(liveResult);
-  } else {
+  } else if (events.length === 0) {
     const cache = loadDiscoverCache();
     if (cache.events.length > 0) {
       const merged = mergeWithCache([], cache, limit);
@@ -256,6 +258,9 @@ export async function discoverEvents(opts: {
       if (_browserEng) await (_browserEng as any).close().catch(()=>{});
       return hydrated;
     }
+  } else {
+    // live had events but 0 zones (all 403) — don't overwrite good cache
+    // healing below will hydrate from cache instead
   }
   // Live succeeded but may be short (some zones blocked) — top up from cache.
   if (events.length < limit) {
@@ -266,6 +271,44 @@ export async function discoverEvents(opts: {
         const stale = stalenessLine(cache);
         liveResult.events = merged.events;
         if (stale) liveResult.warnings.push(`${stale} — merged cached-only events`);
+      }
+    }
+  }
+  // Even when live filled all slots, any live event that came back with 0
+  // zones while cache has zones for the same query should be healed from
+  // cache (common during 403 hard-deny — live overwrites with empty).
+  {
+    const cache = loadDiscoverCache();
+    if (cache.events.length > 0 && cache.source !== 'none') {
+      const cacheByQuery = new Map(cache.events.map(e=>[e.query, e] as const));
+      let healed = 0;
+      for (const ev of liveResult.events) {
+        if (ev.zones.length===0) {
+          const c = cacheByQuery.get(ev.query);
+          if (c && c.zones.length>0) {
+            ev.zones = [...c.zones];
+            ev.rounds = c.rounds.length? [...c.rounds] : ev.rounds;
+            ev.k = c.k ?? ev.k;
+            healed++;
+          }
+        }
+      }
+      // If still 0 zones overall (e.g. live list diverged from cache), merge cache-only events with zones
+      const totalZones = liveResult.events.reduce((a,e)=>a+e.zones.length,0);
+      if (totalZones===0) {
+        const merged = mergeWithCache(liveResult.events, cache, limit);
+        // keep only cache events that have zones to surface something useful
+        const withZones = merged.events.filter(e=>e.zones.length>0);
+        if (withZones.length>0) {
+          liveResult.events = [...withZones, ...merged.events.filter(e=>e.zones.length===0)].slice(0, limit);
+          healed = withZones.length;
+        }
+      }
+      if (healed>0) {
+        const stale = stalenessLine(cache);
+        if (stale && !liveResult.warnings.some(w=>w.includes('cached discovery'))) {
+          liveResult.warnings.push(`${stale} — healed ${healed} zones from cache (live 403)`);
+        }
       }
     }
   }
