@@ -387,10 +387,20 @@ export async function confirmSeats(page: Page): Promise<BookResult> {
     let btn: Awaited<ReturnType<Page['$']>> | null = null;
     for (const sel of candidates) {
       btn = await page.$(sel);
-      if (btn) break;
+      if (!btn) continue;
+      // ticket E2E: a found button may be hidden (display:none until seats
+      // validated). Skip hidden candidates instead of failing on click.
+      const visible = await btn.isVisible().catch(() => false);
+      if (visible) break;
+      btn = null;
     }
-    // Fallback: any visible button/input submit on the page
-    if (!btn) btn = await page.$('button, input[type="submit"], input[type="button"], a.btn, a.button');
+    // Fallback: any VISIBLE button/input submit on the page
+    if (!btn) {
+      const all = await page.$$('button, input[type="submit"], input[type="button"], a.btn, a.button');
+      for (const b of all) {
+        if (await b.isVisible().catch(() => false)) { btn = b; break; }
+      }
+    }
     if (!btn) {
       // Debug: dump available buttons for diagnostics (visible in server log)
       try {
