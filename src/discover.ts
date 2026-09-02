@@ -204,19 +204,10 @@ export async function discoverEvents(opts: {
   }
 
   const cachePath = join(config.dataDir, 'discover-cache.json');
-  // Try to hydrate from cache when live fetch is blocked (Akamai 403)
-  function loadCache(): DiscoverResult | null {
-    try {
-      if (!existsSync(cachePath)) return null;
-      const raw = readFileSync(cachePath, 'utf-8');
-      const j = JSON.parse(raw) as DiscoverResult;
-      if (!j.events || j.events.length === 0) return null;
-      return j;
-    } catch { return null; }
-  }
-  function saveCache(result: DiscoverResult): void {
-    try { mkdirSync(config.dataDir, { recursive: true }); writeFileSync(cachePath, JSON.stringify(result), 'utf-8'); } catch {}
-  }
+  // Ticket 18: unified cache backbone (local + repo layers, merge, staleness)
+  const { loadDiscoverCache, saveDiscoverCache, mergeWithCache, stalenessLine, seedLocalCacheFromRepo } = await import('./discover-cache.js');
+  // Cold start: seed local cache from the committed repo copy once.
+  seedLocalCacheFromRepo();
 
   const events: DiscoveredEvent[] = [];
   for (const item of listing) {
@@ -245,24 +236,37 @@ export async function discoverEvents(opts: {
       events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones: [], rounds: [], k: null });
     }
   }
-  // Cache-or-hydrate: keep realtime but survive Akamai 403 windows
+  // Ticket 18: cache-or-merge — persist every successful live discover,
+  // and when live comes up empty/short, merge cached events into the gaps
+  // (live wins per query). Staleness is surfaced, never hidden.
   const liveResult: DiscoverResult = { fetchedAtMs: Date.now(), concertUrl, events, warnings: [...warnings] };
   if (events.length > 0) {
-    // Success — persist for WAF-blocked fallback
-    saveCache(liveResult);
+    saveDiscoverCache(liveResult);
   } else {
-    const cached = loadCache();
-    if (cached && cached.events.length > 0) {
-      const ageM = Math.round((Date.now() - cached.fetchedAtMs) / 60000);
-      // Return cached events but surface that this is stale + live warnings
+    const cache = loadDiscoverCache();
+    if (cache.events.length > 0) {
+      const merged = mergeWithCache([], cache, limit);
+      const stale = stalenessLine(cache);
       const hydrated: DiscoverResult = {
-        fetchedAtMs: cached.fetchedAtMs,
-        concertUrl: cached.concertUrl,
-        events: cached.events.slice(0, limit),
-        warnings: [...warnings, `serving cached discovery (${cached.events.length} events, ${ageM}m ago) — live fetch blocked (403), retry later or use custom query`],
+        fetchedAtMs: cache.fetchedAtMs ?? Date.now(),
+        concertUrl: cache.events[0]?.zonesUrl?.includes('query=') ? concertUrl : concertUrl,
+        events: merged.events,
+        warnings: [...warnings, ...(stale ? [`${stale} — live fetch blocked, retry later or use custom query`] : [])],
       };
       if (_browserEng) await (_browserEng as any).close().catch(()=>{});
       return hydrated;
+    }
+  }
+  // Live succeeded but may be short (some zones blocked) — top up from cache.
+  if (events.length < limit) {
+    const cache = loadDiscoverCache();
+    if (cache.events.length > 0 && cache.source !== 'none') {
+      const merged = mergeWithCache(events, cache, limit);
+      if (merged.events.length > events.length) {
+        const stale = stalenessLine(cache);
+        liveResult.events = merged.events;
+        if (stale) liveResult.warnings.push(`${stale} — merged cached-only events`);
+      }
     }
   }
   // cleanup browser fallback if used

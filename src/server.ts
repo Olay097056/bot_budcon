@@ -364,6 +364,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     const limit = limitRaw ? Math.max(1, Math.min(50, Number(limitRaw) || 30)) : 30;
     try {
       const result = await discoverEvents({ limit });
+      // Ticket 18: after a successful live discover, sync the cache into the
+      // repo (commit+push) so cloud runners hydrate for free. Fire-and-forget.
+      if (result.events.length > 0) {
+        void import('./cache-sync.js').catch(() => {});
+      }
       json(res, 200, result);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -404,20 +409,16 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       let k = r.status >= 200 && r.status < 300 ? (di as unknown as { parseK: (s: string) => string | null }).parseK(bodyText) : null;
       const isLoginRedirect = bodyText.length < 400 && /url=\s*\/?user\/signin\.php/i.test(bodyText);
       const isWaf = bodyText.includes('waf-verify') || bodyText.includes('Access Denied') || r.status === 403;
-      // Cache fallback when WAF blocks preview
+      // Cache fallback when WAF blocks preview — unified backbone (ticket 18)
       if ((isWaf || zones.length === 0) && q) {
         try {
-          const { readFileSync: rfs, existsSync: es } = await import('node:fs');
-          const { join: jp } = await import('node:path');
-          const cp = jp(config.dataDir, 'discover-cache.json');
-          if (es(cp)) {
-            const j = JSON.parse(rfs(cp, 'utf-8')) as { events: Array<{query:string,zones:string[],rounds:string[],k:string|null, zonesUrl:string}> };
-            const hit = j.events.find(e=> e.query===q);
-            if (hit && hit.zones.length>0) {
-              zones = hit.zones;
-              rounds = hit.rounds;
-              k = hit.k;
-            }
+          const { loadDiscoverCache } = await import('./discover-cache.js');
+          const cache = loadDiscoverCache();
+          const hit = cache.events.find((e) => e.query === q);
+          if (hit && hit.zones.length > 0) {
+            zones = hit.zones;
+            rounds = hit.rounds;
+            k = hit.k;
           }
         } catch {}
       }
