@@ -445,6 +445,34 @@ const server = createServer((req, res) => {
 
 server.listen(config.server.port, () => {
   log(`bot_budcon UI → http://localhost:${config.server.port}`);
+  // Ticket 20: zero-friction startup — everything the first discover needs,
+  // done silently so the user never opens a terminal:
+  //   1. stale Firefox lock cleanup (zombie from a crashed prior run)
+  //   2. cache seed from the committed repo copy (cold start offline)
+  //   3. warm-up discover in the background (UI has data on first paint)
+  void (async () => {
+    try {
+      const { existsSync, unlinkSync } = await import('node:fs');
+      for (const name of ['parent.lock', 'lock', '.parentlock']) {
+        const p = config.paths.firefoxProfile + '/' + name;
+        if (existsSync(p)) { try { unlinkSync(p); log(`startup: removed stale lock ${name}`); } catch {} }
+      }
+    } catch {}
+    try {
+      const { seedLocalCacheFromRepo } = await import('./discover-cache.js');
+      if (seedLocalCacheFromRepo()) log('startup: seeded discover cache from repo copy');
+    } catch {}
+    try {
+      const { discoverEvents } = await import('./discover.js');
+      const r = await discoverEvents({ limit: 12 });
+      log(`startup warm-up: ${r.events.length} events${r.warnings.length ? ' (' + r.warnings[0] + ')' : ''}`);
+      if (r.events.length > 0) {
+        void import('./cache-sync.js').catch(() => {});
+      }
+    } catch (e: unknown) {
+      log(`startup warm-up failed: ${e instanceof Error ? e.message : e}`);
+    }
+  })();
 });
 
 const shutdown = (): void => {

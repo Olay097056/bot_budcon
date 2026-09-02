@@ -37,10 +37,10 @@ export interface CacheInfo {
 }
 
 /** Read the freshest available cache: local first, repo as fallback. */
-export function loadDiscoverCache(): CacheInfo {
+export function loadDiscoverCache(repoPath: string = REPO_CACHE): CacheInfo {
   for (const [path, source] of [
     [localCachePath(), 'local'],
-    [REPO_CACHE, 'repo'],
+    [repoPath, 'repo'],
   ] as const) {
     try {
       if (!existsSync(path)) continue;

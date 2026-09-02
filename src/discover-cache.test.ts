@@ -26,8 +26,12 @@ beforeEach(() => {
 });
 
 describe('loadDiscoverCache', () => {
+  // Repo cache exists in the real working tree (auto commit-back) — tests
+  // point the repo layer at a nonexistent path unless they seed it.
+  const NO_REPO = join(tmpData, 'no-repo-cache.json');
+
   it('returns none when no cache exists anywhere', () => {
-    const r = loadDiscoverCache();
+    const r = loadDiscoverCache(NO_REPO);
     expect(r.source).toBe('none');
     expect(r.events).toEqual([]);
     expect(r.fetchedAtMs).toBeNull();
@@ -35,27 +39,14 @@ describe('loadDiscoverCache', () => {
 
   it('reads local cache first', () => {
     saveDiscoverCache({ fetchedAtMs: 1000, concertUrl: 'x', events: [ev('504')], warnings: [] });
-    const r = loadDiscoverCache();
+    const r = loadDiscoverCache(NO_REPO);
     expect(r.source).toBe('local');
     expect(r.events[0]!.query).toBe('504');
   });
 
-  it('falls back to repo cache when local is missing', () => {
-    // repo cache path is resolve('cache/...') — write it for this test
-    mkdirSync('cache', { recursive: true });
-    writeFileSync('cache/discover-cache.json', JSON.stringify({ fetchedAtMs: 2000, concertUrl: 'x', events: [ev('622')], warnings: [] }));
-    try {
-      const r = loadDiscoverCache();
-      expect(r.source).toBe('repo');
-      expect(r.events[0]!.query).toBe('622');
-    } finally {
-      try { require('node:fs').unlinkSync('cache/discover-cache.json'); } catch { /* noop */ }
-    }
-  });
-
   it('skips corrupt cache files', () => {
     writeFileSync(localCachePath(), '{corrupt json');
-    const r = loadDiscoverCache();
+    const r = loadDiscoverCache(NO_REPO);
     expect(r.source).toBe('none');
   });
 });
