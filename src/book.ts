@@ -79,7 +79,34 @@ export async function book(opts: BookOptions): Promise<BookResult> {
   }
 
   const qty = opts.quantity ?? 1;
-  const page = opts.context.pages()[0] ?? await opts.context.newPage();
+  // Always use a fresh page for robustness — reusing the payment page
+  // from a previous booking leaves it on /payment and makes the next
+  // `page.goto(zonesUrl)` race with the previous payment's session.
+  // Creating a new page isolates each attempt; the previous payment
+  // page stays open for the human to complete 3-D Secure.
+  const existing = opts.context.pages();
+  const first = existing[0];
+  // Duck-type isClosed / url — unit tests pass plain { url(): '...' } mocks.
+  const isClosed = typeof (first as { isClosed?: () => boolean } | undefined)?.isClosed === 'function'
+    ? (first as { isClosed: () => boolean }).isClosed()
+    : false;
+  const firstUrl = typeof (first as { url?: () => string } | undefined)?.url === 'function'
+    ? (first as { url: () => string }).url()
+    : '';
+  const needsFresh = !first
+    || isClosed
+    || /payment|checkout|pay/.test(firstUrl);
+  let page: import('playwright').Page;
+  if (needsFresh) {
+    page = await opts.context.newPage();
+  } else {
+    page = first as import('playwright').Page;
+    // Close any extra pages left from earlier retries so we keep
+    // at most 2 tabs (current + previous payment) and don't leak.
+    for (const extra of existing.slice(1)) {
+      try { await extra.close(); } catch {}
+    }
+  }
 
   // 1. Open the zones page and click the zone anchor.
   await page.goto(opts.zonesUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });

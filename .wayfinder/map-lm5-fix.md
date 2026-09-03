@@ -13,6 +13,7 @@
 
 - [T01 Target closed](tickets-lm5-fix/T01-context-closed.md): `getContext()` ไม่เช็ค `isClosed`/`isConnected` → `newPage()` throw — แก้ dead check + recreate + server retry 1 ครั้ง — LM5 ครั้งแรก humanStep ผ่านแล้ว
 - [T02 ไปหน้าจ่ายเงินทิพย์](tickets-lm5-fix/T02-payment-not-reached.md): `confirmSeats` คืน ok ทันทีหลัง click ไม่เช็ค url — แก้ verify `still fixed.php && !hasPayment && stillHasBookBtn → error` ทำให้รายงานตรง browser
+- [T03 ยิง 5 ครั้งติด](tickets-lm5-fix/T03-lm5-e2e-verify.md): ใช้ page เดิมค้างที่ payment ครั้งก่อน — แก้ fresh page เมื่อ isClosed/payment url, duck-type `isClosed`/`url` รองรับ mock — 5/5 attempts ไม่ Target closed ไม่ Protocol error ไม่ false positive, error ตรง browser
 
 ## Not yet specified
 
