@@ -365,9 +365,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     try {
       const result = await discoverEvents({ limit });
       // Ticket 18: after a successful live discover, sync the cache into the
-      // repo (commit+push) so cloud runners hydrate for free. Fire-and-forget.
+      // repo (commit+push) so cloud runners hydrate for free. Fire-and-forget
+      // via child process — never import cache-sync as module (it calls process.exit).
       if (result.events.length > 0) {
-        void import('./cache-sync.js').catch(() => {});
+        void (async () => { try { const { spawn } = await import('node:child_process'); spawn(process.execPath, ['src/cache-sync.ts'], { stdio: 'ignore', detached: true }).unref(); } catch {} })();
       }
       json(res, 200, result);
     } catch (e: unknown) {
@@ -467,7 +468,7 @@ server.listen(config.server.port, () => {
       const r = await discoverEvents({ limit: 12 });
       log(`startup warm-up: ${r.events.length} events${r.warnings.length ? ' (' + r.warnings[0] + ')' : ''}`);
       if (r.events.length > 0) {
-        void import('./cache-sync.js').catch(() => {});
+        void (async () => { try { const { spawn } = await import('node:child_process'); spawn(process.execPath, ['src/cache-sync.ts'], { stdio: 'ignore', detached: true }).unref(); } catch {} })();
       }
     } catch (e: unknown) {
       log(`startup warm-up failed: ${e instanceof Error ? e.message : e}`);
