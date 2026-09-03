@@ -501,6 +501,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  // TEMP DEBUG (local): POST /api/debug/fetch {url} → {status, body} via hardenedFetcher
+  if (req.method === 'POST' && url.pathname === '/api/debug/fetch') {
+    const body = await readJsonBody(req);
+    const u = typeof body['url'] === 'string' ? body['url'].trim() : '';
+    if (!u || !u.startsWith('https://')) { json(res, 400, { error: 'url required' }); return; }
+    try {
+      const hf = (await import('./ttm-fetch.js')).hardenedFetcher;
+      const r = await hf({ referer: 'https://www.thaiticketmajor.com/' })(u);
+      json(res, 200, { status: r.status, len: r.body.length, body: r.body.slice(0, 200_000) });
+    } catch (e: unknown) {
+      json(res, 500, { error: e instanceof Error ? e.message : String(e) });
+    }
+    return;
+  }
+
   text(res, 404, `not found: ${req.method ?? 'GET'} ${url.pathname}`);
 }
 
@@ -532,7 +547,7 @@ server.listen(config.server.port, () => {
     } catch {}
     try {
       const { discoverEvents } = await import('./discover.js');
-      const r = await discoverEvents({ limit: 12 });
+      const r = await discoverEvents({ limit: 18 });
       log(`startup warm-up: ${r.events.length} events${r.warnings.length ? ' (' + r.warnings[0] + ')' : ''}`);
       if (r.events.length > 0) {
         void (async () => { try { const { spawn } = await import('node:child_process'); spawn(process.execPath, ['src/cache-sync.ts'], { stdio: 'ignore', detached: true }).unref(); } catch {} })();
