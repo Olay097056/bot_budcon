@@ -14,11 +14,11 @@ Dashboard `bot_budcon` โชว์ผังจริงจาก TTM ได้�
 - [T01 Live TTM HTML probe — รูปผังฮอลล์ + coords + ตารางที่นั่ง มีอะไรให้ดึงสดบ้าง](tickets-ux/T01-live-html-probe.md): สดวันนี้ `concert 200` แต่ `zones+fixed` 403 hard deny 414B ไม่มี `<img>/<area>/#tableseats` ให้ parse — cache 21h old 8 zones heal ได้แต่ยังไม่มี `hallImageUrl/areas` ต้องรอ T03 เติม `parseHallImage/parseAreas` regex + heal เดียวกับ zones
 - [T02 Hall map UX prototype — กดบนรูปเลือกโซนได้ + pills sync สองทาง](tickets-ux/T02-hall-map-prototype.md): สร้าง A+B 2 แบบ — **เลือก A เป็นหลัก** `map-wrap 590×420 img+svg polygon overlay hover cyan active cyan glow` pills ล่าง sync + seat-grid ใต้รูป, B เป็น split tier เก็บไว้
 - [T03 Backend — ดึง imageUrl + area coords + rounds/k จาก zones.php แบบ realtime ไม่ hardcode](tickets-ux/T03-backend-hall-image.md): เพิ่ม `parseHallImage/parseAreas` + `DiscoveredEvent hallImageUrl/areas[]` + heal เดียวกับ zones + `preview` ส่ง `hallImageUrl/areas` + migration cache เก่า — `TSC:0 121 tests`
+- [T04 Seat-grid UX prototype — ผังที่นั่งละเอียดในโซนจาก fixed.php กดเลือกที่นั่งได้](tickets-ux/T04-seat-grid-prototype.md): สร้าง A+B 2 แบบ — **เลือก A เป็นหลัก** grid 12 cols ใต้ hall map (35 ที่นั่ง) แบบ B drawer เก็บไว้
 
 ## Not yet specified
 
-- สี/สถานะที่นั่ง `seatnotavail` vs `seatuncheck` vs `seatchecked` จะแมปเป็นสีอะไรให้อ่านง่ายบนพื้นมืด — รอ T04
-- ประสิทธิภาพเมื่อฮอลล์ใหญ่ 45 โซน + ตารางที่นั่ง 35 ที่นั่ง/โซน — ต้อง virtualize ไหม — รอ T04
+- (none — frontier clear to T05 wire)
 
 ## Out of scope
 

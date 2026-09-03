@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Prototype Seats A — Grid below hall</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--void:#070A14;--panel:#11162A;--line:#232946;--paper:#F0EDE8;--muted:#8A8FA3;--muted2:#5A6080;--cyan:#00E5FF;--amber:#FFB800;--green:#00D68F}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"IBM Plex Sans Thai",system-ui,sans-serif;background:var(--void);color:var(--paper);padding:24px}
+.shell{max-width:860px;margin:0 auto}
+.panel{background:linear-gradient(180deg,#11162A,#12162B);border:1px solid var(--line);border-radius:14px;padding:14px}
+.seat-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;margin-top:10px;padding:12px;background:#070A14;border:1px solid var(--line);border-radius:10px}
+.seat{aspect-ratio:1;border-radius:7px;display:grid;place-items:center;font-family:"JetBrains Mono",monospace;font-size:10px;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted)}
+.seat.free{background:rgba(0,214,143,.14);border-color:rgba(0,214,143,.32);color:var(--paper)}
+.seat.taken{background:rgba(138,143,163,.10);border-color:transparent;color:var(--muted2);cursor:not-allowed}
+.seat.picked{background:var(--amber);border-color:var(--amber);color:#1a1200;font-weight:700}
+.legend{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--muted)}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:4px}
+.note{font-size:12px;color:var(--muted)} .note.ok{color:var(--green)}
+.badge{padding:3px 9px;border-radius:999px;font-size:11px;background:rgba(0,214,143,.12);border:1px solid rgba(0,214,143,.25);color:var(--green)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div style="font-family:Sora;font-weight:700">Prototype Seats A — Grid ใต้ hall map (แบบเลือกในหน้าเดียว)</div>
+  <div style="font-size:12px;color:var(--muted);margin:4px 2px 12px">กดโซนแล้ว grid โผล่ใต้ hall map ทันที — ไม่ต้องเปิด modal, เลือก 2 จาก 3 ที่ขอได้, ปุ่ม "จองเลย" enabled เมื่อครบ</div>
+  <div class="panel">
+    <div style="font-weight:700">โซน <span style="color:var(--amber)">D1</span> — 35 ที่นั่ง <span class="badge">ว่าง 28 · เต็ม 7</span></div>
+    <div class="seat-grid" id="grid"></div>
+    <div class="legend"><span><i style="background:rgba(0,214,143,.14);border:1px solid rgba(0,214,143,.32)"></i>ว่าง</span><span><i style="background:var(--amber)"></i>เลือกแล้ว</span><span><i style="background:rgba(138,143,163,.10)"></i>ไม่ว่าง</span></div>
+    <div class="note ok" id="note" style="margin-top:8px">เลือก 0/2 ใบ — กดที่นั่งว่างเพื่อเลือก</div>
+    <div style="display:flex;gap:8px;margin-top:10px"><button id="book" disabled style="padding:11px 18px;border-radius:999px;background:var(--paper);color:var(--void);font-weight:700;border:1px solid var(--paper)">จองเลย — D1 ×2</button><span class="note" id="bNote" style="align-self:center">เลือกที่นั่งให้ครบก่อน</span></div>
+  </div>
+  <div class="note" style="margin-top:8px">States: ว่าง=เขียวจาง / เลือก=เหลือง amber / ไม่ว่าง=เทา — คลิก toggle, เกิน quantity จะแทนที่ตัวเก่า</div>
+</div>
+<script>
+let picked=new Set(); const qty=2;
+const grid=document.getElementById('grid');
+for(let i=0;i<35;i++){
+  const taken=[3,7,12,18,22,27,31].includes(i);
+  const title=`D1-${String(i+1).padStart(2,'0')}`;
+  const d=document.createElement('div');
+  d.className='seat '+(taken?'taken': picked.has(title)?'picked':'free');
+  d.textContent=String(i+1).padStart(2,'0');
+  d.title=title;
+  if(!taken) d.onclick=()=>{
+    if(picked.has(title)) picked.delete(title);
+    else { if(picked.size>=qty) { const first=[...picked][0]; picked.delete(first); } picked.add(title); }
+    render();
+  };
+  grid.appendChild(d);
+}
+function render(){
+  [...grid.children].forEach((el,i)=>{
+    const title=`D1-${String(i+1).padStart(2,'0')}`;
+    const taken=[3,7,12,18,22,27,31].includes(i);
+    el.className='seat '+(taken?'taken': picked.has(title)?'picked':'free');
+  });
+  document.getElementById('note').textContent=`เลือก ${picked.size}/${qty} ใบ ${picked.size? '— '+[...picked].join(', ') : '— กดที่นั่งว่างเพื่อเลือก'}`;
+  document.getElementById('note').className = picked.size===qty ? 'note ok' : 'note';
+  document.getElementById('book').disabled = picked.size!==qty;
+  document.getElementById('bNote').textContent = picked.size===qty ? 'พร้อมจอง!' : 'เลือกที่นั่งให้ครบก่อน';
+}
+render();
+</script>
+</body>
+</html>

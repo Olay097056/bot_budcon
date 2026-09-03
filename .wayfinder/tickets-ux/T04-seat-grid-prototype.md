@@ -2,7 +2,7 @@
 id: T04
 title: Seat-grid UX prototype — ผังที่นั่งละเอียดในโซนจาก fixed.php กดเลือกที่นั่งได้
 type: prototype
-status: open
+status: closed
 blocks: [T05]
 blocked_by: []
 ---
@@ -28,3 +28,13 @@ blocked_by: []
 
 - `ui/prototype-seats-a.html`, `ui/prototype-seats-b.html` (2 แบบ) + เลือกแบบหนึ่ง
 - สรุปใน issue: เลือก layout ไหน + เหตุผล + spec ให้ T05 ทำจริง (รวมสี/ขนาด/สถานะ)
+
+## Resolution 2026-09-03 — T04 closed ✅ — เลือก A เป็นหลัก
+
+**Prototype A** (`ui/prototype-seats-a.html` 5.2KB): grid 12 cols ใต้ hall map เลย (35 ที่นั่ง `ว่าง=green/14 เลือก=amber เต็ม=muted` legend ครบ) กด toggle แทนที่เมื่อเกิน `qty` + ปุ่ม `จองเลย D1×2` enabled เมื่อ `picked==qty` — ไม่ต้องเปิด modal อีกชั้น ลื่นสุดบน 860px
+
+**Prototype B** (`ui/prototype-seats-b.html` 5.4KB): drawer กลางจอ `10 cols` แยกชั้น — โฟกัสเลือกที่นั่งดี แต่ต้องคลิกเพิ่ม 1 ครั้งและบัง hall map
+
+**Decision**: **เอา A เป็นหลัก** เดียวกับ T02 A — hall map เต็มกว้าง + seat-grid ใต้รูปในหน้าเดียว (pattern เดียวกัน) — T05 จะ wire แบบ A ใน `ui/index.html` (seat-grid ใต้ `map-wrap` โชว์เมื่อ `selected` และ fetch `fixed.php` preview) + B เก็บไว้
+
+Evidence: `ui/prototype-seats-a.html`, `ui/prototype-seats-b.html`

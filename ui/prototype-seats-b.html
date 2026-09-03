@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Prototype Seats B — Drawer/Modal</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--void:#070A14;--panel:#11162A;--line:#232946;--paper:#F0EDE8;--muted:#8A8FA3;--amber:#FFB800;--green:#00D68F}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"IBM Plex Sans Thai",system-ui,sans-serif;background:var(--void);color:var(--paper);padding:24px}
+.shell{max-width:860px;margin:0 auto}
+.panel{background:linear-gradient(180deg,#11162A,#12162B);border:1px solid var(--line);border-radius:14px;padding:14px}
+.btn{padding:10px 16px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--paper);font-weight:600;cursor:pointer}
+.btn-amber{background:var(--amber);color:#1a1200;border-color:var(--amber)}
+.drawer{position:fixed;inset:0;background:rgba(3,6,16,.72);display:none;place-items:center;padding:16px;z-index:50}
+.drawer.show{display:grid}
+.card{width:min(640px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;max-height:90vh;overflow:auto}
+.seat-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:10px}
+.seat{aspect-ratio:1;border-radius:7px;display:grid;place-items:center;font-family:"JetBrains Mono",monospace;font-size:10px;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted)}
+.seat.free{background:rgba(0,214,143,.14);border-color:rgba(0,214,143,.3);color:var(--paper)}
+.seat.taken{background:rgba(138,143,163,.1);color:#5A6080;cursor:not-allowed}
+.seat.picked{background:var(--amber);border-color:var(--amber);color:#1a1200;font-weight:700}
+.note{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div style="font-family:Sora;font-weight:700">Prototype Seats B — Drawer/Modal (แบบแยกชั้น)</div>
+  <div style="font-size:12px;color:var(--muted);margin:4px 2px 12px">กดโซนแล้วเด้ง drawer กลางจอ — โฟกัสเลือกที่นั่งอย่างเดียว ปิดแล้วกลับมาหน้า hall map</div>
+  <div class="panel">
+    <div style="font-weight:700">เลือกโซนแล้ว — กดเพื่อเปิดผังที่นั่ง</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn" onclick="openDrawer('A1')">A1 — 24 ที่นั่ง</button>
+      <button class="btn btn-amber" onclick="openDrawer('D1')">D1 — 35 ที่นั่ง ★</button>
+      <button class="btn" onclick="openDrawer('B2')">B2 — 18 ที่นั่ง</button>
+    </div>
+    <div class="note" style="margin-top:8px">แบบ B แยก "เลือกโซน" กับ "เลือกที่นั่ง" เป็นสองชั้น — ไม่รกหน้าเดียว แต่ต้องคลิกเพิ่ม 1 ครั้ง</div>
+  </div>
+</div>
+<div class="drawer" id="drawer" onclick="if(event.target===this) closeDrawer()">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px"><div style="font-weight:700">ที่นั่งโซน <span id="zone" style="color:var(--amber)">—</span></div><button class="btn" style="margin-left:auto" onclick="closeDrawer()">✕ ปิด</button></div>
+    <div class="seat-grid" id="grid"></div>
+    <div class="note" id="note" style="margin-top:8px">เลือก 0/2 ใบ</div>
+    <div style="display:flex;gap:8px;margin-top:10px"><button id="book" disabled class="btn btn-amber">จองเลย — D1 ×2</button><span class="note" id="bNote" style="align-self:center">เลือกให้ครบก่อน</span></div>
+  </div>
+</div>
+<script>
+let picked=new Set(), qty=2, cur='D1';
+function openDrawer(z){ cur=z; picked=new Set(); document.getElementById('zone').textContent=z; document.getElementById('drawer').classList.add('show'); render(); }
+function closeDrawer(){ document.getElementById('drawer').classList.remove('show'); }
+function render(){
+  const grid=document.getElementById('grid'); grid.innerHTML='';
+  const n = cur==='D1'?35:24;
+  const taken = cur==='D1'?[3,7,12,18,22,27,31]:[2,5,11];
+  for(let i=0;i<n;i++){
+    const t=taken.includes(i);
+    const title=`${cur}-${String(i+1).padStart(2,'0')}`;
+    const d=document.createElement('div'); d.className='seat '+(t?'taken': picked.has(title)?'picked':'free'); d.textContent=String(i+1).padStart(2,'0');
+    if(!t) d.onclick=()=>{ if(picked.has(title)) picked.delete(title); else { if(picked.size>=qty) picked.delete([...picked][0]); picked.add(title);} render(); };
+    grid.appendChild(d);
+  }
+  document.getElementById('note').textContent=`เลือก ${picked.size}/${qty} ใบ ${picked.size? '— '+[...picked].join(', '):''}`;
+  document.getElementById('book').disabled=picked.size!==qty;
+  document.getElementById('book').textContent=`จองเลย — ${cur} ×${qty}`;
+  document.getElementById('bNote').textContent=picked.size===qty?'พร้อมจอง!':'เลือกให้ครบก่อน';
+}
+</script>
+</body>
+</html>

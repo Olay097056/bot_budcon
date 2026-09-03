@@ -4,7 +4,7 @@ title: Frontend wire — เอาผังฮอลล์ + ผังที่�
 type: task
 status: open
 blocks: []
-blocked_by: [T02, T03, T04]
+blocked_by: []
 ---
 
 ## Question
