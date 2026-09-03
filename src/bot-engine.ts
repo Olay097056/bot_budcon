@@ -118,28 +118,52 @@ export class BotEngine {
    */
   async getContext(): Promise<BrowserContext> {
     if (this._context) {
-      // Re-seed on every access so a fresh invisible login (ticket 14)
-      // is picked up without needing to restart the server / kill
-      // the persistent profile.
+      // T01 LM5 FIX: if context/browser died (user closed Firefox, crash, or prior Target closed),
+      // _context is non-null but closed — pages() / newPage() will throw "Target has been closed".
+      // Detect and recreate instead of returning a dead context.
+      let dead = false;
       try {
-        const store = loadCookies();
-        const pwCookies = store
-          .filter((c) => c.name && c.value && c.domain)
-          .map((c) => ({
-            name: c.name,
-            value: c.value,
-            domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
-            path: c.path ?? '/',
-            secure: Boolean(c.secure),
-            httpOnly: Boolean(c.httpOnly),
-            expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
-            sameSite: 'Lax' as const,
-          }));
-        if (pwCookies.length) await this._context.addCookies(pwCookies);
+        const maybeClosed = (this._context as unknown as { isClosed?: () => boolean }).isClosed?.();
+        if (maybeClosed) dead = true;
+        else {
+          const browser = (this._context as unknown as { browser: () => { isConnected: () => boolean } | null }).browser?.();
+          if (browser && !browser.isConnected()) dead = true;
+          else {
+            // pages() throws if context is closing/closed
+            this._context.pages();
+          }
+        }
       } catch {
-        // best effort
+        dead = true;
       }
-      return this._context;
+      if (dead) {
+        try { await this._context.close().catch(()=>{}); } catch {}
+        this._context = null;
+        this._page = null;
+      } else {
+        // Re-seed on every access so a fresh invisible login (ticket 14)
+        // is picked up without needing to restart the server / kill
+        // the persistent profile.
+        try {
+          const store = loadCookies();
+          const pwCookies = store
+            .filter((c) => c.name && c.value && c.domain)
+            .map((c) => ({
+              name: c.name,
+              value: c.value,
+              domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
+              path: c.path ?? '/',
+              secure: Boolean(c.secure),
+              httpOnly: Boolean(c.httpOnly),
+              expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
+              sameSite: 'Lax' as const,
+            }));
+          if (pwCookies.length) await this._context.addCookies(pwCookies);
+        } catch {
+          // best effort
+        }
+        return this._context;
+      }
     }
 
     // Pick Firefox (TTM detection fits Firefox best per ticket 07

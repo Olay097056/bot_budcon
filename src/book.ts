@@ -482,6 +482,23 @@ export async function confirmSeats(page: Page): Promise<BookResult> {
     }
     await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 5000 }).catch(() => {});
     await (page as unknown as { waitForTimeout?: (ms:number)=>Promise<void> }).waitForTimeout?.(400).catch(() => {});
+    // T02 LM5 FIX: verify we actually left fixed.php — previous code returned ok even when click did nothing (button disabled / seats not validated)
+    // which caused "ไปหน้าจ่ายเงิน" while browser still on booking page.
+    try {
+      const url = page.url();
+      const stillFixed = url.includes('fixed.php') || url.includes('zones.php?query=');
+      if (stillFixed) {
+        // Check if payment form is present on same page (some flows keep same url but show overlay)
+        const hasPayment = await (page as unknown as { $: (s:string)=>Promise<unknown> }).$.call(page, 'input[name="cardNumber"], input[name="cc-number"], #payment, .payment-form, input[name="cardCvc"]').then(x=>!!x).catch(()=>false);
+        const stillHasBookBtn = await (page as unknown as { $: (s:string)=>Promise<unknown> }).$.call(page, '#booknow, #bookmnow').then(async (el:any)=>{
+          if(!el) return false;
+          try{ return await el.isVisible(); }catch{ return true; }
+        }).catch(()=>false);
+        if (!hasPayment && stillHasBookBtn) {
+          return { ok: false, step: 'confirmSeats', error: 'confirm did not navigate — button may be disabled or seats not validated (ยังอยู่หน้าเลือกที่นั่ง: ' + url + ')' };
+        }
+      }
+    } catch {}
     return { ok: true, step: 'confirmSeats' };
   } catch (e) {
     return { ok: false, step: 'confirmSeats', error: (e as Error).message };

@@ -327,6 +327,26 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
       const msg = e instanceof Error ? e.message : String(e);
+      // T01: retry once when context died mid-flight (Target closed) — engine.getContext() now recreates, so retry book
+      if (msg.includes('Target') && msg.includes('closed')) {
+        try {
+          log(`book ${code} Target closed — retrying with fresh context`);
+          const ctx2 = await engine.getContext();
+          const result2 = await book({ context: ctx2, zonesUrl, code, quantity, cookies });
+          json(res, 200, result2);
+          return;
+        } catch (e2: unknown) {
+          if (e2 instanceof HumanStepRequired) {
+            log(`book ${code} retry → human step at ${e2.step}`);
+            json(res, 200, { ok: false, step: e2.step, humanStep: true, error: e2.message });
+            return;
+          }
+          const msg2 = e2 instanceof Error ? e2.message : String(e2);
+          log(`book retry error: ${msg2}`);
+          json(res, 500, { ok: false, step: 'selectZone', error: msg2 });
+          return;
+        }
+      }
       log(`book error: ${msg}`);
       json(res, 500, { ok: false, step: 'selectZone', error: msg });
       return;
