@@ -44,6 +44,8 @@ export interface DiscoveredEvent {
   k: string | null;
   /** Hall map image absolute URL from zones.php <img usemap> — null if none / 403 */
   hallImageUrl: string | null;
+  hallImageWidth?: number | null;
+  hallImageHeight?: number | null;
   /** Hall map areas from <map><area> — empty if none */
   areas: { code: string; href: string; coords: number[]; shape: string }[];
 }
@@ -135,15 +137,21 @@ function parseK(html: string): string | null {
 }
 
 function parseHallImage(html: string): string | null {
+  const m = parseHallImageMeta(html);
+  return m ? m.url : null;
+}
+function parseHallImageMeta(html: string): { url: string; w: number | null; h: number | null } | null {
   const imgTags = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]!);
   const withMap = imgTags.filter((s) => /usemap/i.test(s));
-  const src = withMap[0]?.match(/\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
+  const tag = withMap[0] ?? null;
+  if (!tag) return null;
+  const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
   if (!src) return null;
-  try {
-    return new URL(src, 'https://booking.thaiticketmajor.com').toString();
-  } catch {
-    return src;
-  }
+  let url: string;
+  try { url = new URL(src, 'https://booking.thaiticketmajor.com').toString(); } catch { url = src; }
+  const w = parseInt(tag.match(/\bwidth=["']?(\d+)["']?/i)?.[1] ?? '', 10);
+  const h = parseInt(tag.match(/\bheight=["']?(\d+)["']?/i)?.[1] ?? '', 10);
+  return { url, w: Number.isFinite(w) ? w : null, h: Number.isFinite(h) ? h : null };
 }
 
 function parseAreas(html: string): { code: string; href: string; coords: number[]; shape: string }[] {
@@ -269,7 +277,7 @@ export async function discoverEvents(opts: {
       const zones = parseZones(r.body).map((z) => z.code);
       const rounds = parseRounds(r.body);
       const k = parseK(r.body);
-      events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones, rounds, k, hallImageUrl: parseHallImage(r.body), areas: parseAreas(r.body) });
+       { const meta = parseHallImageMeta(r.body); events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones, rounds, k, hallImageUrl: meta ? meta.url : null, hallImageWidth: (meta as any)?.w ?? null, hallImageHeight: (meta as any)?.h ?? null, areas: parseAreas(r.body) }); }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       warnings.push(`${item.query}: ${msg}`);
@@ -331,7 +339,7 @@ export async function discoverEvents(opts: {
             ev.rounds = c.rounds.length? [...c.rounds] : ev.rounds;
             ev.k = c.k ?? ev.k;
             // heal hall image/areas alongside zones
-            if (!ev.hallImageUrl && (c as any).hallImageUrl) { ev.hallImageUrl = (c as any).hallImageUrl; hallHealed++; }
+            if (!ev.hallImageUrl && (c as any).hallImageUrl) { ev.hallImageUrl = (c as any).hallImageUrl; (ev as any).hallImageWidth = (c as any).hallImageWidth ?? null; (ev as any).hallImageHeight = (c as any).hallImageHeight ?? null; hallHealed++; }
             if ((!ev.areas || ev.areas.length===0) && (c as any).areas?.length) { ev.areas = [...(c as any).areas]; }
             healed++;
           }
@@ -339,7 +347,7 @@ export async function discoverEvents(opts: {
           // live had zones but hall image may still be empty (403 partial) — heal hall separately
           const c = cacheByQuery.get(ev.query);
           if (c) {
-            if (!ev.hallImageUrl && (c as any).hallImageUrl) { ev.hallImageUrl = (c as any).hallImageUrl; hallHealed++; }
+            if (!ev.hallImageUrl && (c as any).hallImageUrl) { ev.hallImageUrl = (c as any).hallImageUrl; (ev as any).hallImageWidth = (c as any).hallImageWidth ?? null; (ev as any).hallImageHeight = (c as any).hallImageHeight ?? null; hallHealed++; }
             if ((!ev.areas || ev.areas.length===0) && (c as any).areas?.length) { ev.areas = [...(c as any).areas]; }
           }
         }
@@ -369,4 +377,4 @@ export async function discoverEvents(opts: {
 }
 
 // re-export for test introspection (not public API)
-export const _internal = { extractConcertListing, parseRounds, parseK, parseHallImage, parseAreas, buildZonesUrl };
+export const _internal = { extractConcertListing, parseRounds, parseK, parseHallImage, parseHallImageMeta, parseAreas, buildZonesUrl };

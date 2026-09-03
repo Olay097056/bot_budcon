@@ -158,7 +158,8 @@ export class WatchManager {
 
     const fetcher = opts.fetcher ?? defaultFetcher;
     const baseMs = Number(process.env.BOT_BUDCON_WATCH_MS ?? '') || 15_000;
-    const intervalMs = opts.intervalMs ?? baseMs;
+    const burst = process.env.BOT_BUDCON_WATCH_BURST === '1' || process.env.BOT_BUDCON_WATCH_BURST === 'true';
+    const intervalMs = opts.intervalMs ?? (burst ? 3000 : baseMs);
 
     this._log(`watch start → ${url}`);
 

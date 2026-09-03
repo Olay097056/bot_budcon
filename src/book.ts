@@ -199,11 +199,11 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
           });
         } catch {}
         // round_change() does form POST -> page reload with ?rdId=...&k=...&tk=...
-        await page.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => {});
-        await page.waitForTimeout(1500);
+        await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(700);
         // If still on query=504 without rdId, wait a bit more and try once more
         if (page.url().includes('zones.php?query=')) {
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(400);
         }
         // re-resolve href after reload (k may have changed, but code stays)
         // re-find the zone anchor after reload to determine fixed vs festival
@@ -256,15 +256,15 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
           (globalThis as unknown as { location: { href: string } }).location.href = h;
         }
       }, hrefForJs);
-      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
-      await page.waitForTimeout(1000);
+      await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(400);
       navOk = true;
     } catch {}
     if (!navOk || page.url().includes('zones.php')) {
       // Fallback: direct location.href via evaluate (ensures Referer)
       await page.evaluate((u: string) => { (globalThis as unknown as { location: { href: string } }).location.href = u; }, fullUrl);
-      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
-      await page.waitForTimeout(1000);
+      await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(400);
     } else if (page.url().includes('error.php') || page.url().includes('errcode')) {
       // still check — selectzone may have already navigated to error
     }
@@ -329,29 +329,39 @@ async function pickSeats(page: Page, quantity: number): Promise<BookResult> {
     }
     const toPick = seats.slice(0, quantity);
     for (const title of toPick) {
-      // Click the <td> — fixed.js listens on tr > td
       const sel = `td[title="${title}"]`;
       const td = await page.$(sel);
       if (td) {
+        let seatClicked = false;
         try {
-          await (td as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true } as unknown as never);
+          const hasEval = typeof (td as unknown as { evaluate?: unknown }).evaluate === 'function';
+          if (hasEval) {
+            await (td as unknown as { evaluate: (fn:(el:any)=>void)=>Promise<void> }).evaluate((el: any) => (el as any).click());
+            seatClicked = true;
+          } else {
+            throw new Error('no handle evaluate');
+          }
         } catch {
-          // fallback via evaluate
-          await page.evaluate((t: string) => {
-            const el = (globalThis as unknown as { document: { querySelector: (s:string)=>{ click: ()=>void }|null } }).document.querySelector(`td[title="${t}"]`);
-            el?.click();
-          }, title);
+          try {
+            await (td as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true, timeout: 3000 } as unknown as never);
+            seatClicked = true;
+          } catch {
+            await page.evaluate((t: string) => {
+              const el = (globalThis as unknown as { document: { querySelector: (s:string)=>{ click: ()=>void }|null } }).document.querySelector(`td[title="${t}"]`);
+              el?.click();
+            }, title);
+            seatClicked = true;
+          }
         }
-        await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(600).catch(() => {});
+        if (seatClicked) await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(250).catch(() => {});
       }
     }
-    // Wait for validateseat.php AJAX to settle and hidden inputs to appear
-    await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(1000).catch(() => {});
+    // Wait for validateseat.php AJAX to settle and hidden inputs to appear (reduced waits for speed — T01)
+    await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(500).catch(() => {});
     // Verify at least one hidden chkSeats[] was created
     const chkCount: number = await page.$$eval("input[id^='hid-checkseat']", (els) => els.length).catch(() => 0);
     if (chkCount === 0) {
-      // Sometimes fixed.js needs a tick — try one more wait
-      await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(1500).catch(() => {});
+      await (page as unknown as { waitForTimeout: (ms:number)=>Promise<void> }).waitForTimeout(800).catch(() => {});
       const chk2: number = await page.$$eval("input[id^='hid-checkseat']", (els) => els.length).catch(() => 0);
       if (chk2 === 0) return { ok: false, step: 'selectQuantity', error: `seat click did not register (tried ${toPick.join(',')})` };
     }
@@ -411,24 +421,67 @@ export async function confirmSeats(page: Page): Promise<BookResult> {
       } catch {}
       return { ok: false, step: 'confirmSeats', error: 'no confirm button' };
     }
-    // Click can detach the element immediately when it triggers
-    // navigation (fixed.php -> next). Use force + sequential wait
-    // instead of Promise.all which races detachment against click.
+    // FIX T02: elementHandle.click with Playwright actionability waits can Timeout 30s
+    // (scrolling->forcing->performing hang when overlay/detach). Use evaluate-based
+    // click which bypasses actionability, and treat Timeout/detached as success
+    // if navigation started (url changed). Keep btn.click as fallback for mocks.
+    const beforeUrl = (() => { try { return page.url(); } catch { return ''; } })();
+    let matchedSel: string | null = null;
     try {
-      await (btn as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true } as unknown as never);
+      for (const sel of candidates) {
+        try {
+          const el = await page.$(sel);
+          if (el && (await el.isVisible().catch(() => false))) { matchedSel = sel; break; }
+        } catch {}
+      }
+    } catch {}
+    try {
+      if (matchedSel) {
+        const hasEval = typeof (page as unknown as { $eval?: unknown }).$eval === 'function';
+        if (hasEval) {
+          await (page as unknown as { $eval: (s:string, fn:(el:any)=>void)=>Promise<void> }).$eval(matchedSel, (el: unknown) => (el as any).click());
+        } else {
+          const hasHE = typeof (btn as unknown as { evaluate?: unknown }).evaluate === 'function';
+          if (hasHE) {
+            await (btn as unknown as { evaluate: (fn:(el:any)=>void)=>Promise<void> }).evaluate((el: any) => (el as any).click());
+          } else {
+            await (btn as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true, timeout: 5000 } as unknown as never);
+          }
+        }
+      } else {
+        const hasHandleEval = typeof (btn as unknown as { evaluate?: unknown }).evaluate === 'function';
+        if (hasHandleEval) {
+          await (btn as unknown as { evaluate: (fn:(el:any)=>void)=>Promise<void> }).evaluate((el: any) => (el as any).click());
+        } else {
+          await (btn as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true, timeout: 5000 } as unknown as never);
+        }
+      }
     } catch (e) {
-      // If click threw "not attached" but navigation already started,
-      // consider it success — we landed to next page.
       const msg = (e as Error).message ?? '';
-      if (msg.includes('not attached') || msg.includes('detached')) {
-        await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 10_000 }).catch(() => {});
-        await (page as unknown as { waitForTimeout?: (ms:number)=>Promise<void> }).waitForTimeout?.(800).catch(() => {});
+      const afterUrl = (() => { try { return page.url(); } catch { return beforeUrl; } })();
+      const navigated = afterUrl !== beforeUrl;
+      if (msg.includes('not attached') || msg.includes('detached') || msg.includes('Target closed') || (msg.includes('Timeout') && navigated)) {
+        await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 5000 }).catch(() => {});
         return { ok: true, step: 'confirmSeats' };
       }
-      throw e;
+      if (msg.includes('Timeout')) {
+        try {
+          await (btn as unknown as { click: (opts?: unknown) => Promise<void> }).click({ force: true, timeout: 3000 } as unknown as never);
+        } catch (e2) {
+          const m2 = (e2 as Error).message ?? '';
+          const after2 = (() => { try { return page.url(); } catch { return beforeUrl; } })();
+          if (m2.includes('not attached') || m2.includes('detached') || after2 !== beforeUrl) {
+            await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 5000 }).catch(() => {});
+            return { ok: true, step: 'confirmSeats' };
+          }
+          throw e2;
+        }
+      } else {
+        throw e;
+      }
     }
-    await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 10_000 }).catch(() => {});
-    await (page as unknown as { waitForTimeout?: (ms:number)=>Promise<void> }).waitForTimeout?.(800).catch(() => {});
+    await (page as unknown as { waitForLoadState?: (s:string, opts?:unknown)=>Promise<void> }).waitForLoadState?.('domcontentloaded', { timeout: 5000 }).catch(() => {});
+    await (page as unknown as { waitForTimeout?: (ms:number)=>Promise<void> }).waitForTimeout?.(400).catch(() => {});
     return { ok: true, step: 'confirmSeats' };
   } catch (e) {
     return { ok: false, step: 'confirmSeats', error: (e as Error).message };

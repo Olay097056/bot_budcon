@@ -588,21 +588,52 @@ function renderHall(ev){
   wrap.style.display='';
   if(url){
     img.style.display=''; fb.style.display='none';
+    // propagate known dimensions so viewBox can be correct even before naturalWidth is known
+    try{ if(ev.hallImageWidth) img.setAttribute('width', String(ev.hallImageWidth)); if(ev.hallImageHeight) img.setAttribute('height', String(ev.hallImageHeight)); }catch{}
     img.onerror = ()=>{ img.style.display='none'; fb.style.display=''; fb.textContent='โหลดผังไม่สำเร็จ (403/ออฟไลน์) — เลือกโซนจากปุ่มด้านบนได้'; };
-    img.onload = ()=>{ fb.style.display='none'; };
+    img.onload = ()=>{ fb.style.display='none'; try{ const nw=img.naturalWidth, nh=img.naturalHeight; if(nw&&nh) svg.setAttribute('viewBox','0 0 '+nw+' '+nh); }catch{} };
     const u = url + (url.includes('?')?'&':'?') + 't=' + Date.now();
     if(img.src!==u) img.src=u; else img.src=u;
   } else {
     img.style.display='none'; fb.style.display=''; fb.textContent='ยังไม่มีรูปผังสำหรับงานนี้ — เลือกโซนจากปุ่มได้';
   }
   svg.innerHTML='';
-  let maxX=1000, maxY=600;
+  let maxX=590, maxY=530;
   try{ for(const a of areas){ for(let i=0;i<a.coords.length;i+=2){ maxX=Math.max(maxX,a.coords[i]); maxY=Math.max(maxY,a.coords[i+1]); } } }catch{}
-  svg.setAttribute('viewBox','0 0 '+maxX+' '+maxY);
+  // T03 FIX: viewBox must match image natural size (590x530 for 741), not coords max (529x496).
+  // Use <img width/height> or naturalWidth if available, so polygon coords align with image pixels.
+  let vbW = maxX, vbH = maxY;
+  try{
+    const wAttr = parseInt(img.getAttribute('width')||'0',10);
+    const hAttr = parseInt(img.getAttribute('height')||'0',10);
+    const natW = img.naturalWidth || 0;
+    const natH = img.naturalHeight || 0;
+    if (natW && natH) { vbW = natW; vbH = natH; }
+    else if (wAttr && hAttr) { vbW = wAttr; vbH = hAttr; }
+    // also consider areas + image size — use the larger to avoid clipping
+    vbW = Math.max(vbW, maxX);
+    vbH = Math.max(vbH, maxY);
+  }catch{}
+  svg.setAttribute('viewBox','0 0 '+vbW+' '+vbH);
+  // when image loads, correct viewBox to natural size (TTM coords are in natural image pixels)
+  try{
+    const fixVB = ()=>{
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      if(nw && nh){ svg.setAttribute('viewBox','0 0 '+nw+' '+nh); }
+    };
+    if(img.complete && img.naturalWidth) fixVB();
+    else img.addEventListener('load', fixVB, {once:true});
+  }catch{}
   for(const a of areas){
-    if(!a.coords || a.coords.length<4) continue;
+    if(!a.coords || a.coords.length<2) continue;
+    const isRect = (a.shape||'').toLowerCase()==='rect' && a.coords.length===4;
     const pts=[];
-    for(let i=0;i<a.coords.length;i+=2) pts.push(a.coords[i]+','+a.coords[i+1]);
+    if(isRect){
+      const [x1,y1,x2,y2] = a.coords;
+      pts.push(x1+','+y1, x2+','+y1, x2+','+y2, x1+','+y2);
+    } else {
+      for(let i=0;i<a.coords.length;i+=2) pts.push(a.coords[i]+','+a.coords[i+1]);
+    }
     const el=document.createElementNS('http://www.w3.org/2000/svg','polygon');
     el.setAttribute('points', pts.join(' '));
     el.setAttribute('class','hall-poly'+(hallState.selectedCode===a.code?' active':''));
