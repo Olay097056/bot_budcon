@@ -538,10 +538,17 @@ function renderZones(zones){
   const grid=$('zoneGrid'), grid2=$('zoneGrid2');
   const label=$('bookZoneLabel');
   grid.innerHTML=''; grid2.innerHTML='';
+  // clear stale zone/code when switching events
+  $('bookQty').dataset.code='';
+  hallState.selectedCode=null;
+  document.querySelectorAll('.hall-poly').forEach(x=>x.classList.remove('active'));
+  $('seatWrap').style.display='none';
+  $('seatGrid').innerHTML='';
+  $('seatNote').textContent='';
   if(!zones || !zones.length){
-    label.textContent='เลือกงานแสดงก่อน — โซนจะแสดงเป็นปุ่มให้กด';
+    label.textContent='ยังไม่เปิดขาย — รอโซนเปิดหรือเลือกงานอื่น';
     label.classList.remove('has');
-    if(hallState && hallState.ev) renderHall(hallState.ev);
+    $('hallWrap').style.display='none';
     return;
   }
   label.textContent= zones.length+' โซน — กดเลือกโซนที่ต้องการ (หรือกดบนผัง)';

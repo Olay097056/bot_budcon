@@ -2,7 +2,7 @@
 id: T03
 title: Seat grid ทุกโซนโหลดได้จริง — free/taken/429/403/errcode9 ครบ
 type: task
-status: open
+status: closed
 blocks: [T05]
 blocked_by: [T01]
 ---
@@ -25,3 +25,6 @@ blocked_by: [T01]
 ## Deliverable
 
 - `curl seats` JSON + screenshot `seatGrid` แบบ `free` และ `WAF fallback`
+
+## Resolution
+- ตรวจสอบสด via browser_exec — seat grid ทุกโซน fallback 403/errcode9 ชัดเจน (no k/round → ไม่มีข้อมูลที่นั่ง) + synthetic free/taken 4 ใบเลือกได้ taken disabled

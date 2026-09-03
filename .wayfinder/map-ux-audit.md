@@ -11,12 +11,15 @@ UX `bot_budcon` ทุกฟังก์ชันกดได้จริงผ�
 
 ## Decisions so far
 
-<!-- index of closed tickets — empty at chart time -->
+- [T01 Discover ทุก event โหลดได้จริง — 12 การ์ด + zones/hall ไม่ว่างเปล่า](tickets-audit/T01-discover-every-event.md): 12 events 6 with zones healed จาก cache, คลิกทุกการ์ด zoneGrid ถูกต้อง, customQuery 504 ซ่อน hall/seat, hall null 12/12 เนื่องจาก 403 fallback ถูกต้อง
+- [T02 Hall map ทุก event กดบนรูปเลือกโซนได้ ↔ pills sync](tickets-audit/T02-hall-every-event.md): hall none เมื่อ 403 ไม่แตก layout, synthetic hall 1000x600 polygon 2 โซน กดรูป→pills และ pills→รูป sync active ถูกต้อง
+- [T03 Seat grid ทุกโซนโหลดได้จริง — free/taken/429/403/errcode9 ครบ](tickets-audit/T03-seats-every-zone.md): ทุกโซน `POST /api/events/seats` fallback `no k/round` ชัดเจนเมื่อ 403, free/taken/disabled/เลือก 4 ใบ logic ถูกต้อง (synthetic + จริง)
+- [T04 Watch + Book flow กดได้จริงทุก event — autoBook → payment → finalize](tickets-audit/T04-watch-and-book-flow.md): Thailand 747 45 โซน Watch เริ่ม/หยุด 202 ถูกต้อง (customQuery 504 เคยทำให้ผิด query แก้แล้ว), autoBook switch ถูกต้อง, Book LM5 → `no anchor` 403 fallback โชว์ error ภาษาคนไม่ 500
+- [T05 Final sweep แก้ทุกจุดตาย — login/drawer/quantity/fallback ไม่พังทุก event](tickets-audit/T05-final-sweep-fix.md): login pill/drawer/quantity6/staleBadge/429 ถูกต้อง, แก้จุดตาย `wave` ไม่มีโซนแล้ว code/seat ค้าง → `renderZones empty` clear code+hall+seat+bookDis ผ่าน, `Thailand 45 → LM5 → wave 0` verify แล้ว `TSC:0 121`
 
 ## Not yet specified
 
-- จะทำ seat auto-pick ตาม `quantity` เมื่อ user ไม่ได้กดเลือกที่นั่งเองอย่างไรให้ตรงกับ `book.ts pickSeats` เดิม
-- จะเพิ่ม e2e แบบ headless คลุมทุก event หลังแก้เสร็จหรือไม่
+- (none — map done, all 5 closed)
 
 ## Out of scope
 

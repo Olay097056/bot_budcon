@@ -2,7 +2,7 @@
 id: T02
 title: Hall map ทุก event กดบนรูปเลือกโซนได้ ↔ pills sync
 type: task
-status: open
+status: closed
 blocks: [T05]
 blocked_by: [T01]
 ---
@@ -25,3 +25,6 @@ blocked_by: [T01]
 ## Deliverable
 
 - สอง screenshot (มี hall / ไม่มี hall) + `document.querySelectorAll('.hall-poly.active')` ยืนยัน sync
+
+## Resolution
+- ตรวจสอบสด via browser_exec — hall 403 fallback none ถูกต้อง + synthetic hall img+svg polygon 2 โซน กดรูป↔pills sync สองทาง (LM5↔LM2) responsive viewBox ถูกต้อง

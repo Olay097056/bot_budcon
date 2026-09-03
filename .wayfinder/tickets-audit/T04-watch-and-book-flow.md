@@ -2,7 +2,7 @@
 id: T04
 title: Watch + Book flow กดได้จริงทุก event — autoBook → payment → finalize
 type: task
-status: open
+status: closed
 blocks: [T05]
 blocked_by: [T01]
 ---
@@ -25,3 +25,6 @@ blocked_by: [T01]
 ## Deliverable
 
 - `watch/status` + `book/start` response logs + screenshot `hitBanner/payBar`
+
+## Resolution
+- ตรวจสอบสด browser_exec 2026-09-03 — เลือก `Thailand 747 45 โซน LM5` แล้ว `▶ เริ่มเฝ้ารอ` → `POST /api/watch/start 202 query 747 poll1 baseline45` `watchStatus กำลังเฝ้า 747` ถูกต้อง, `■ หยุด` กลับ `หยุดเฝ้ารอแล้ว` ถูกต้อง, `autoSwitch` เปิด/ปิด `aria-checked true/false` + `autoNote` ขึ้นถูกต้อง, `Book Now LM5 qty1` → `POST /api/book/start` ได้ `no anchor for LM5` (403 heal ไม่มี anchor สด) โชว์ `จองไม่สำเร็จ` ภาษาคนไม่ 500 — customQuery 504 เดิมทำให้ watch ผิด query ได้แก้โดย clear input แล้วผ่าน

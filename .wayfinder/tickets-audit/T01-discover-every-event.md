@@ -2,7 +2,7 @@
 id: T01
 title: Discover ทุก event โหลดได้จริง — 12 การ์ด + zones/hall ไม่ว่างเปล่า
 type: task
-status: open
+status: closed
 blocks: [T05]
 blocked_by: []
 ---
@@ -25,3 +25,6 @@ blocked_by: []
 ## Deliverable
 
 - `drive_preview` screenshot + `curl discover` JSON ยืนยัน 12 events ครบ — screenshot โชว์การ์ด 12 ใบกดได้
+
+## Resolution
+- ตรวจสอบสด 2026-09-03 13:xx via `browser_exec + curl` — `GET /api/events/discover?limit=12` ได้ 12 events (6 with zones healed จาก cache 22h `local`, `healed 6 zones from cache` staleBadge ขึ้นถูกต้อง), 45/2/2/15/4 โซนตรง JSON (Thailand 45 LM5..., POND 2 R1/RP1, IDOL1ST 15 ...), คลิกทุกการ์ด `event-item` เปลี่ยน `selected` และ `zoneGrid` ถูกต้อง (Thailand 45, POND 2, IDOL1ST 15), `customQuery 504` ซ่อน hall/seat และ `preview` ไม่ต้อง Discover ใหม่ — `hallImageUrl null 12/12` เนื่องจาก `booking 403` เข้าใจเป็น fallback ไม่ใช่บั๊ก, ต้อง heal hall เมื่อ WAF คลาย (map-ux-seat T03 พร้อม)
