@@ -2,7 +2,7 @@
 id: T01
 title: Live TTM HTML probe — รูปผังฮอลล์ + coords + ตารางที่นั่ง มีอะไรให้ดึงสดบ้าง
 type: research
-status: open
+status: closed
 blocks: [T03, T04]
 blocked_by: []
 ---
@@ -28,3 +28,13 @@ blocked_by: []
 
 - `references/T01-result.md` + `tickets-ux/T01-result.md` สรุป: imageUrl pattern, area count vs zone count,coords sample, tableseats rows/cols, 403 body sample, cache heal ได้ไหม
 - สั้นๆ ใน issue comment: มีรูปให้ดึงสดไหม + ต้อง fallback อะไร
+
+## Resolution 2026-09-03 — T01 closed ✅ (probe 340s)
+
+**ผลยิงสดวันนี้**: `concert/ 200 114KB 20 queries` ปกติ แต่ `zones.php 504/650/622` + `fixed.php` ทั้งหมด `403 Access Denied 414B hard deny` (ไม่ใช่ 71B signin) — ไม่มี `<img usemap>`/`<area>`/`#tableseats` สดให้ parse เลย (พิสูจน์ `curl+jar+Referer [REDACTED]` + `fetch Firefox UA` + `wreq` ก็ 403 หมด)
+
+**Cache heal**: `discover-cache.json` 21h old 12 events (8 มี `zones/k/rounds` ครบ) heal `zones` ได้ แต่ **ยังไม่มี `hallImageUrl/areas` field** จึงไม่มีรูปให้ heal — T03 ต้องเพิ่ม `parseHallImage()`+`parseAreas()` regex (`<img usemap>` → absolute URL, `<map><area shape poly coords>` → `number[]`) + เติม `hallImageUrl/areas[]` ลง `DiscoveredEvent` + heal เดียวกับ `zones` แล้วรอบที่ live 200 ค่อยเติม cache ใหม่
+
+**Venue canvas/svg**: ไม่พบจริงในประวัติ TTM (`590×530 <img>` เดิม) — ให้ fallback pills-only + badge `map unavailable` เมื่อ `withMapCount==0`
+
+Evidence: `.wayfinder/references/T01-result.md` + `.wayfinder/tickets-ux/T01-result.md` (20KB) + 5 HTML snippets `T01-html-*.html`

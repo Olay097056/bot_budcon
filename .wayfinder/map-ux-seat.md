@@ -11,11 +11,10 @@ Dashboard `bot_budcon` โชว์ผังจริงจาก TTM ได้�
 
 ## Decisions so far
 
-<!-- index of closed tickets. Gist + link. Empty at chart time. -->
+- [T01 Live TTM HTML probe — รูปผังฮอลล์ + coords + ตารางที่นั่ง มีอะไรให้ดึงสดบ้าง](tickets-ux/T01-live-html-probe.md): สดวันนี้ `concert 200` แต่ `zones+fixed` 403 hard deny 414B ไม่มี `<img>/<area>/#tableseats` ให้ parse — cache 21h old 8 zones heal ได้แต่ยังไม่มี `hallImageUrl/areas` ต้องรอ T03 เติม `parseHallImage/parseAreas` regex + heal เดียวกับ zones
 
 ## Not yet specified
 
-- Venue ที่รูปผังเป็น `canvas/svg` แทน `<img usemap>` จะ handle ยังไง — รอ T01 probe ก่อน
 - สี/สถานะที่นั่ง `seatnotavail` vs `seatuncheck` vs `seatchecked` จะแมปเป็นสีอะไรให้อ่านง่ายบนพื้นมืด — รอ T02 prototype
 - ประสิทธิภาพเมื่อฮอลล์ใหญ่ 45 โซน + ตารางที่นั่ง 35 ที่นั่ง/โซน — ต้อง virtualize ไหม — รอ T04
 

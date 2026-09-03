@@ -4,7 +4,7 @@ title: Backend — ดึง imageUrl + area coords + rounds/k จาก zones.p
 type: task
 status: open
 blocks: [T05]
-blocked_by: [T01]
+blocked_by: []
 ---
 
 ## Question

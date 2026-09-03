@@ -4,7 +4,7 @@ title: Seat-grid UX prototype — ผังที่นั่งละเอี�
 type: prototype
 status: open
 blocks: [T05]
-blocked_by: [T01]
+blocked_by: []
 ---
 
 ## Question
