@@ -239,6 +239,26 @@ export class WatchManager {
         this._consecFail++;
         this._consecOk = 0;
         const isHard = status === 403 || status === 429 || status === 503 || body.includes('Access Denied') || body.includes('Reference #');
+        const isSoft = blocked && !isHard;
+        // Try jar refresh on soft-block (71B signin bounce) at fail #2 — re-seed _abck before it becomes hard deny
+        if (isSoft && this._consecFail === 2) {
+          this._log('soft-block ×2 — attempting jar refresh via browser');
+          try {
+            const { BotEngine } = await import('./bot-engine.js');
+            const eng: any = new (BotEngine as any)();
+            const ctx = await eng.getContext();
+            // Touch a booking page to let Akamai re-issue _abck/bm_sv via the real browser jar
+            const page = await ctx.newPage();
+            try {
+              await page.goto('https://booking.thaiticketmajor.com/booking/3m/zones.php?query=504', { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(()=>{});
+              await page.waitForTimeout(1500).catch(()=>{});
+            } finally { await page.close().catch(()=>{}); }
+            this._log('jar refresh done — next poll will use fresh cookies');
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            this._log(`jar refresh failed: ${msg}`);
+          }
+        }
         const backoff = backoffFor(this._consecFail, intervalMs);
         const tag = isHard ? 'hard' : 'soft';
         this._log(`watch poll #${pollN}: ${blocked ? 'soft-block' : `http ${status}`} — backoff ${backoff}ms (fail#${this._consecFail} ${tag})`);
