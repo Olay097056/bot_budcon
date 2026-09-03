@@ -1,0 +1,27 @@
+---
+id: T05
+title: Final sweep แก้ทุกจุดตาย — login/drawer/quantity/fallback ไม่พังทุก event
+type: task
+status: open
+blocks: []
+blocked_by: [T01, T02, T03, T04]
+---
+
+## Question
+
+หลังตรวจ T01-T04 จะเหลือจุดตายอะไรที่ทำให้บาง event บางโซนกดไม่ได้ — จะ sweep แก้ `login pill, drawer, quantity 1-6, staleBadge, customQuery, 429 rate-limit, empty states` ให้ครบทุก event อย่างไรแล้วปิด map
+
+## What I need to know
+
+1. `login pill warn/on` + `reloginBtn` กดได้เมื่อ `cookies stale` หรือไม่
+2. `drawer` `staleBadge` `quantity` เลือก `6` แล้ว watch/book ส่ง `quantity` ถูกไหม
+3. มี `event/zone` ไหนที่ `zoneGrid` ว่างแต่ไม่มี `zone-note has` หรือ `hallFallback` ทับ layout หรือไม่
+
+## Method
+
+- กด `drawerToggle` + `customQuery` + `quantity 6` + `429` (กด preview รัว 2 ครั้งใน 30s) ดู `preview rate-limited` 429 ขึ้นถูกต้อง
+- รวม fix เล็กๆ ที่เจอจาก T01-T04 เป็น commit เดียวแล้ว `tsc --noEmit + vitest 121` + `drive_preview` รอบสุดท้ายทุก event
+
+## Deliverable
+
+- commit `fix(ux-audit): ...` + `map-ux-audit Decisions so far` ครบ 5 ปิด map + `git push`
