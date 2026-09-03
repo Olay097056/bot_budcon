@@ -292,6 +292,20 @@ button{font:inherit}
 }
 .zone:hover{ border-color:var(--line-2); color:var(--paper)}
 .zone.active{ background:var(--paper); color:var(--void); border-color:var(--paper); font-weight:600}
+.hall-wrap{ margin-top:12px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#0B0F1E }
+.hall-stage{ position:relative; line-height:0; min-height:220px }
+.hall-stage img{ width:100%; height:auto; display:block; background:#0B0F1E }
+.hall-stage svg{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none }
+.hall-poly{ fill:rgba(0,229,255,.08); stroke:rgba(0,229,255,.45); stroke-width:1.2; cursor:pointer; pointer-events:all; transition: fill .12s, stroke .12s }
+.hall-poly:hover{ fill:rgba(0,229,255,.18) }
+.hall-poly.active{ fill:rgba(0,229,255,.32); stroke:var(--cyan); stroke-width:1.8; filter:drop-shadow(0 0 6px rgba(0,229,255,.5)) }
+.hall-fallback{ padding:18px; text-align:center; color:var(--muted); font-size:13px }
+.hall-meta{ padding:8px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line) }
+.seat{ aspect-ratio:1; border-radius:7px; border:1px solid var(--line); display:grid; place-items:center; font-family:"JetBrains Mono",monospace; font-size:10.5px; cursor:pointer; transition:all .12s; user-select:none }
+.seat.free{ background:rgba(0,229,255,.08); border-color:rgba(0,229,255,.30); color:var(--paper) }
+.seat.free:hover{ border-color:var(--cyan); background:rgba(0,229,255,.16) }
+.seat.free.sel{ background:var(--cyan); color:var(--void); border-color:var(--cyan); font-weight:700 }
+.seat.taken{ background:rgba(255,255,255,.04); border-color:var(--line); color:var(--muted-2); cursor:not-allowed }
 .signal-bar{
   height:30px; border-radius:8px;
   background: #0B0F1E; border:1px solid var(--line);
@@ -388,6 +402,23 @@ button{font:inherit}
     <div class="panel" id="step3Panel">
       <p class="zone-note" id="bookZoneLabel">เลือกงานแสดงก่อน — โซนจะแสดงเป็นปุ่มให้กด</p>
       <div class="zone-grid" id="zoneGrid" aria-label="โซน"></div>
+      <div class="hall-wrap" id="hallWrap" style="display:none">
+        <div class="hall-stage" id="hallStage">
+          <img id="hallImg" alt="ผังฮอลล์รวม" style="display:none"/>
+          <svg id="hallSvg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="hall-fallback" id="hallFallback" style="display:none">กำลังโหลดผัง…</div>
+        </div>
+        <div class="hall-meta" id="hallMeta" style="display:none"></div>
+      </div>
+      <div id="seatWrap" style="display:none; margin-top:12px">
+        <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap">
+          <b style="font-size:13.5px">ที่นั่งในโซน <span id="seatZoneCode" class="mono"></span></b>
+          <span id="seatCount" class="mono" style="font-size:12px; color:var(--muted)"></span>
+          <span id="seatHint" style="font-size:12px; color:var(--muted-2); margin-left:auto">กดเลือกที่นั่งได้ (4 ใบ/ครั้ง)</span>
+        </div>
+        <div id="seatGrid" style="display:grid; grid-template-columns: repeat(12, minmax(0,1fr)); gap:6px; margin-top:8px"></div>
+        <div id="seatNote" class="note"></div>
+      </div>
       <div class="qty-row">
         <label for="bookQty">จำนวนบัตร</label>
         <input id="bookQty" type="number" min="1" max="6" value="1" class="qty-input"/>
@@ -510,27 +541,139 @@ function renderZones(zones){
   if(!zones || !zones.length){
     label.textContent='เลือกงานแสดงก่อน — โซนจะแสดงเป็นปุ่มให้กด';
     label.classList.remove('has');
+    if(hallState && hallState.ev) renderHall(hallState.ev);
     return;
   }
-  label.textContent= zones.length+' โซน — กดเลือกโซนที่ต้องการ';
+  label.textContent= zones.length+' โซน — กดเลือกโซนที่ต้องการ (หรือกดบนผัง)';
   label.classList.add('has');
-  const current=$('bookQty').dataset.code || '';
+  const current=$('bookQty').dataset.code || hallState.selectedCode || '';
   zones.forEach(code=>{
     for(const g of [grid, grid2]){
       const b=document.createElement('button');
       b.type='button'; b.className='zone'+(code===current?' active':'');
       b.textContent=code;
-      b.addEventListener('click', ()=>{
-        document.querySelectorAll('.zone').forEach(x=>x.classList.remove('active'));
-        document.querySelectorAll('.zone').forEach(x=>{ if(x.textContent===code) x.classList.add('active'); });
-        $('bookQty').dataset.code=code;
-        $('bookNote').textContent='เลือกโซน '+code+' แล้ว — กด "จองเลย" ได้เลย';
-        tick(); watchTick();
-      });
+      b.addEventListener('click', ()=>{ setZoneCode(code); });
       g.appendChild(b);
     }
   });
 }
+let hallState = { ev: null, selectedCode: null };
+let seatState = { code: null, seats: [], picked: new Set() };
+
+function setZoneCode(code){
+  $('bookQty').dataset.code = code;
+  hallState.selectedCode = code;
+  document.querySelectorAll('.zone').forEach(x=> x.classList.toggle('active', x.textContent===code));
+  document.querySelectorAll('.hall-poly').forEach(x=> x.classList.toggle('active', x.dataset.code===code));
+  if(code) $('bookNote').textContent='เลือกโซน '+code+' แล้ว — กด "จองเลย" ได้เลย';
+  tick(); watchTick();
+  loadSeatsForCode(code);
+}
+
+function renderHall(ev){
+  hallState.ev = ev;
+  const wrap=$('hallWrap'), img=$('hallImg'), svg=$('hallSvg'), fb=$('hallFallback'), meta=$('hallMeta');
+  const url = ev && (ev.hallImageUrl || null);
+  const areas = ev && Array.isArray(ev.areas) ? ev.areas : [];
+  if(!ev || (!url && areas.length===0)){
+    wrap.style.display='none'; return;
+  }
+  wrap.style.display='';
+  if(url){
+    img.style.display=''; fb.style.display='none';
+    img.onerror = ()=>{ img.style.display='none'; fb.style.display=''; fb.textContent='โหลดผังไม่สำเร็จ (403/ออฟไลน์) — เลือกโซนจากปุ่มด้านบนได้'; };
+    img.onload = ()=>{ fb.style.display='none'; };
+    const u = url + (url.includes('?')?'&':'?') + 't=' + Date.now();
+    if(img.src!==u) img.src=u; else img.src=u;
+  } else {
+    img.style.display='none'; fb.style.display=''; fb.textContent='ยังไม่มีรูปผังสำหรับงานนี้ — เลือกโซนจากปุ่มได้';
+  }
+  svg.innerHTML='';
+  let maxX=1000, maxY=600;
+  try{ for(const a of areas){ for(let i=0;i<a.coords.length;i+=2){ maxX=Math.max(maxX,a.coords[i]); maxY=Math.max(maxY,a.coords[i+1]); } } }catch{}
+  svg.setAttribute('viewBox','0 0 '+maxX+' '+maxY);
+  for(const a of areas){
+    if(!a.coords || a.coords.length<4) continue;
+    const pts=[];
+    for(let i=0;i<a.coords.length;i+=2) pts.push(a.coords[i]+','+a.coords[i+1]);
+    const el=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    el.setAttribute('points', pts.join(' '));
+    el.setAttribute('class','hall-poly'+(hallState.selectedCode===a.code?' active':''));
+    el.dataset.code=a.code;
+    el.style.pointerEvents='all';
+    const title=document.createElementNS('http://www.w3.org/2000/svg','title');
+    title.textContent=a.code;
+    el.appendChild(title);
+    el.addEventListener('click', (e)=>{ e.preventDefault(); setZoneCode(a.code); });
+    svg.appendChild(el);
+    try{
+      let cx=0,cy=0; for(let i=0;i<a.coords.length;i+=2){ cx+=a.coords[i]; cy+=a.coords[i+1]; }
+      cx/=a.coords.length/2; cy/=a.coords.length/2;
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', String(cx)); t.setAttribute('y', String(cy));
+      t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','middle');
+      t.setAttribute('font-size','11'); t.setAttribute('font-family','JetBrains Mono, monospace');
+      t.setAttribute('fill','rgba(240,237,232,.92)'); t.setAttribute('pointer-events','none');
+      t.setAttribute('paint-order','stroke'); t.setAttribute('stroke','rgba(7,10,20,.65)'); t.setAttribute('stroke-width','2.5');
+      t.textContent=a.code; svg.appendChild(t);
+    }catch(e){}
+  }
+  if(areas.length===0 && url){
+    meta.style.display='none';
+  } else {
+    meta.style.display = areas.length? '' : 'none';
+    meta.textContent = areas.length? areas.length+' โซนบนผัง — กดบนผังเพื่อเลือกโซน (sync กับปุ่ม)' : '';
+  }
+}
+
+async function loadSeatsForCode(code){
+  const grid=$('seatGrid'), wrap=$('seatWrap'), note=$('seatNote'), cnt=$('seatCount'), title=$('seatZoneCode');
+  seatState.code=code; seatState.seats=[]; seatState.picked=new Set();
+  if(!code){ wrap.style.display='none'; grid.innerHTML=''; return; }
+  const zonesUrl = zonesUrlForSelection();
+  if(!zonesUrl){ wrap.style.display='none'; return; }
+  wrap.style.display=''; title.textContent=code; grid.innerHTML='<div style="grid-column:1/-1; color:var(--muted); font-size:13px; padding:8px 2px">กำลังโหลดที่นั่ง…</div>'; cnt.textContent=''; note.textContent='';
+  try{
+    const r=await fetch('/api/events/seats',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({zonesUrl, code})});
+    const body=await r.json();
+    if(r.status===429){ grid.innerHTML='<div style="grid-column:1/-1" class="note warn">โดนจำกัดความถี่ — รอ 30 วิแล้วกดโซนใหม่</div>'; return; }
+    if(!r.ok) throw new Error(body.error||('http '+r.status));
+    const seats=Array.isArray(body.seats)? body.seats: [];
+    seatState.seats=seats;
+    const free=seats.filter(s=>s.state==='free').length;
+    const taken=seats.filter(s=>s.state==='taken').length;
+    cnt.textContent = seats.length? 'ว่าง '+free+' / ไม่ว่าง '+taken : '';
+    if(body.warnings && body.warnings.length) note.textContent=body.warnings.join(' · ');
+    if(seats.length===0){
+      if(body.warnings && body.warnings.join('').includes('errcode=9')) grid.innerHTML='<div style="grid-column:1/-1" class="note">ยังไม่เปิดขายโซนนี้ (errcode=9) — ลองโซนอื่น หรือรอ watch เจอโซนใหม่</div>';
+      else if(body.warnings && body.warnings.join('').includes('WAF')) grid.innerHTML='<div style="grid-column:1/-1" class="note warn">โหลดที่นั่งถูกบล็อก (403) — กดจองจากปุ่มได้เลย ระบบจะเลือกที่นั่งให้อัตโนมัติ</div>';
+      else grid.innerHTML='<div style="grid-column:1/-1" class="note">ไม่มีข้อมูลที่นั่ง — กด "จองเลย" เพื่อให้ bot เลือกที่นั่งให้</div>';
+      return;
+    }
+    grid.innerHTML='';
+    for(const s of seats){
+      const b=document.createElement('button'); b.type='button';
+      b.className='seat '+s.state;
+      b.textContent=s.title.split(' ').pop() || s.title;
+      b.title=s.title+' — '+(s.state==='free'?'ว่าง':'ไม่ว่าง');
+      b.disabled = s.state!=='free';
+      b.addEventListener('click', ()=>{
+        if(b.classList.contains('sel')){ b.classList.remove('sel'); seatState.picked.delete(s.title); }
+        else {
+          if(seatState.picked.size>=4){ note.textContent='เลือกได้สูงสุด 4 ที่นั่ง/ครั้ง'; note.className='note warn'; return; }
+          b.classList.add('sel'); seatState.picked.add(s.title);
+        }
+        const n=seatState.picked.size;
+        if(n) { note.textContent='เลือกแล้ว '+n+' ที่นั่ง: '+[...seatState.picked].join(', ') + ' — กด "จองเลย" ระบบจะพยายามจองที่นั่งที่เลือกก่อน'; note.className='note ok'; }
+        else { note.textContent=''; note.className='note'; }
+      });
+      grid.appendChild(b);
+    }
+  }catch(e){
+    grid.innerHTML='<div style="grid-column:1/-1" class="note warn">โหลดที่นั่งไม่สำเร็จ: '+(e.message||e)+'</div>';
+  }
+}
+
 function applyDiscovered(events){
   discovered=events;
   discoverAt=Date.now();
@@ -561,6 +704,7 @@ function applyDiscovered(events){
       item.classList.add('active');
       $('customQuery').value='';
       renderZones(ev.zones||[]);
+      renderHall(ev);
       syncSelectedUI();
       tick(); watchTick();
     };
@@ -572,6 +716,9 @@ function applyDiscovered(events){
     const first=list.querySelector('.event-item');
     if(first) first.classList.add('active');
     renderZones(events[0].zones||[]);
+    renderHall(selected);
+  } else if(selected){
+    renderHall(selected);
   }
   syncSelectedUI();
 }
@@ -748,7 +895,7 @@ async function doDiscover(){
 }
 $('discoverBtn').addEventListener('click', doDiscover);
 $('customQuery').addEventListener('input', ()=>{
-  if($('customQuery').value.trim()){ selected=null; document.querySelectorAll('.event-item').forEach(x=>x.classList.remove('active')); }
+  if($('customQuery').value.trim()){ selected=null; document.querySelectorAll('.event-item').forEach(x=>x.classList.remove('active')); $('hallWrap').style.display='none'; $('seatWrap').style.display='none'; }
   syncSelectedUI(); renderPreview(); tick(); watchTick();
 });
 $('previewBtn').addEventListener('click', async()=>{
@@ -834,11 +981,12 @@ $('bookBtn').addEventListener('click', async()=>{
   if(!code && lastWatch && lastWatch.lastEvent) code=lastWatch.lastEvent.code;
   if(!code){ $('bookNote').textContent='เลือกโซนก่อน (หรือรอระบบเจอโซนใหม่)'; return; }
   const qty=Math.max(1, Math.min(6, Number($('bookQty').value)||1));
+  const seatPicks = seatState.code===code ? [...seatState.picked] : [];
   const zonesUrl=(lastWatch && lastWatch.url)? lastWatch.url : zonesUrlForSelection();
   if(!zonesUrl){ $('bookNote').textContent='เลือกงานแสดงก่อน'; return; }
-  $('bookNote').textContent=`กำลังจองโซน ${code} ×${qty} ใบ…`; $('bookBtn').disabled=true;
+  $('bookNote').textContent=`กำลังจองโซน ${code} ×${qty} ใบ`+(seatPicks.length? ' — ที่นั่ง '+seatPicks.join(', '):'')+`…`; $('bookBtn').disabled=true;
   try{
-    const r=await fetch('/api/book/start',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, zonesUrl, quantity: qty})});
+    const r=await fetch('/api/book/start',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, zonesUrl, quantity: qty, seats: seatPicks})});
     const body=await r.json();
     if(body.humanStep){
       $('bookNote').textContent='จองสำเร็จถึงขั้นชำระเงิน — ทำ captcha/จ่ายเงินใน Firefox แล้วกดปุ่มด้านล่าง';

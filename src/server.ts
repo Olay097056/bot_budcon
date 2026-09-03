@@ -453,6 +453,54 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  // Seats preview for a single zone — fetch fixed.php and parse #tableseats (T05)
+  if (req.method === 'POST' && url.pathname === '/api/events/seats') {
+    const body = await readJsonBody(req);
+    let zonesUrl = typeof body["zonesUrl"] === "string" ? body["zonesUrl"].trim() : (typeof body["url"] === "string" ? body["url"].trim() : "");
+    let code = typeof body["code"] === "string" ? body["code"].trim().toUpperCase() : "";
+    let round = typeof body["round"] === "string" ? body["round"].trim() : "";
+    let k = typeof body["k"] === "string" ? body["k"].trim() : "";
+    if (!zonesUrl || !code) { json(res, 400, { error: "zonesUrl and code required" }); return; }
+    const q = (()=>{ try{ return new URL(zonesUrl).searchParams.get("query")||"";}catch{return ""}})();
+    if (q && previewRateLimited("seats:"+q+":"+code)) { json(res, 429, { error: "seats rate-limited: 1 per 30s per zone", query: q, code }); return; }
+    try {
+      const di = (await import("./discover.js"))._internal;
+      const hf = (await import("./ttm-fetch.js")).hardenedFetcher;
+      if (!k || !round) {
+        const zr = await hf({ referer: "https://www.thaiticketmajor.com/" })(zonesUrl);
+        if (zr.status>=200 && zr.status<300) {
+          if (!k) k = (di as any).parseK(zr.body) || k;
+          if (!round) { const rounds = (di as any).parseRounds(zr.body) as string[]; if (rounds.length) round = String(rounds[0]||''); }
+        }
+      }
+      if (!k || !round) { json(res, 200, { zonesUrl, code, k, round, seats: [], warnings: ["no k/round available — sale not open or 403"], hallImageUrl: null }); return; }
+      const fixedUrl = "https://booking.thaiticketmajor.com/booking/3m/fixed.php?k=" + encodeURIComponent(k) + "&zone=" + encodeURIComponent(code) + "&round=" + encodeURIComponent(round);
+      const r = await hf({ referer: zonesUrl })(fixedUrl);
+      const html = r.body;
+      const isWaf = html.includes("Access Denied") || r.status===403;
+      const isErr9 = html.includes("errcode=9") || html.includes("กรุณาเลือกรอบ");
+      let seats = [];
+      let warnings = [];
+      if (isWaf) warnings.push("fixed fetch WAF-blocked (403)");
+      else if (isErr9) warnings.push("TTM sale not open errcode=9");
+      else {
+        const tblM = html.match(/<table[^>]*id=["']tableseats["'][\s\S]*?<\/table>/i);
+        const tds = tblM ? [...tblM[0].matchAll(/<td[^>]*title=["']([^"']+)["'][\s\S]*?<\/td>/gi)] : [];
+        for (const m of tds) {
+          const title = (m[1]||"").trim();
+          const inner = m[0]||"";
+          const free = /seatuncheck/i.test(inner);
+          const taken = /seatnotavail/i.test(inner);
+          if (free) seats.push({ title, state: "free" });
+          else if (taken) seats.push({ title, state: "taken" });
+        }
+        if (!tblM) warnings.push("no #tableseats found");
+      }
+      json(res, 200, { zonesUrl, code, k, round, fixedUrl, status: r.status, seats, taken: seats.filter((s)=>s.state==="taken").length, free: seats.filter((s)=>s.state==="free").length, warnings, hallImageUrl: null });
+    } catch (e) { json(res, 500, { error: e instanceof Error ? e.message : String(e), zonesUrl, code }); }
+    return;
+  }
+
   text(res, 404, `not found: ${req.method ?? 'GET'} ${url.pathname}`);
 }
 

@@ -2,7 +2,7 @@
 id: T05
 title: Frontend wire — เอาผังฮอลล์ + ผังที่นั่งขึ้น dashboard จริง pills sync สองทาง + fallback
 type: task
-status: open
+status: closed
 blocks: []
 blocked_by: []
 ---
@@ -29,3 +29,6 @@ blocked_by: []
 
 - `ui/index.html` เดียวจบ — กดเลือกโซนบนรูปได้จริง, pills sync สองทาง, กดโซนแล้วเห็น seat-grid กดเลือกที่นั่งได้, ผ่าน `tsc --noEmit` + `vitest` เดิมไม่พัง
 - Verify: `curl /api/events/discover?limit=1` มี `hallImageUrl` + เปิด `http://localhost:7890` กดโซนบนรูปแล้ว `bookBtn` enabled + `seat-grid` ขึ้น
+
+## Resolution
+- Wire เสร็จ 2026-09-03: `ui/index.html` 879→~1100 บรรทัด — เพิ่ม `hallWrap (img+svg polygon overlay)` + `seatWrap (grid 12 cols)` ใต้ `zoneGrid`, กดบนรูปเลือกโซนได้ `setZoneCode()` sync pills↔svg `active` สองทาง, เลือกโซนแล้ว `POST /api/events/seats` โหลด `#tableseats` realtime (free/taken, 429/403/errcode9 fallback ครบ) กดเลือกที่นั่งได้ 4 ใบ ส่ง `seats[]` ใน `POST /api/book/start` จริง, `403` heal โชว์ pills+cache/placeholder ไม่ว่าง, อยู่ไฟล์เดียว ไม่พัง Watch/Book เดิม — `TSC:0 121/121`

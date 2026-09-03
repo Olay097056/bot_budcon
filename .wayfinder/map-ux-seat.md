@@ -15,10 +15,11 @@ Dashboard `bot_budcon` โชว์ผังจริงจาก TTM ได้�
 - [T02 Hall map UX prototype — กดบนรูปเลือกโซนได้ + pills sync สองทาง](tickets-ux/T02-hall-map-prototype.md): สร้าง A+B 2 แบบ — **เลือก A เป็นหลัก** `map-wrap 590×420 img+svg polygon overlay hover cyan active cyan glow` pills ล่าง sync + seat-grid ใต้รูป, B เป็น split tier เก็บไว้
 - [T03 Backend — ดึง imageUrl + area coords + rounds/k จาก zones.php แบบ realtime ไม่ hardcode](tickets-ux/T03-backend-hall-image.md): เพิ่ม `parseHallImage/parseAreas` + `DiscoveredEvent hallImageUrl/areas[]` + heal เดียวกับ zones + `preview` ส่ง `hallImageUrl/areas` + migration cache เก่า — `TSC:0 121 tests`
 - [T04 Seat-grid UX prototype — ผังที่นั่งละเอียดในโซนจาก fixed.php กดเลือกที่นั่งได้](tickets-ux/T04-seat-grid-prototype.md): สร้าง A+B 2 แบบ — **เลือก A เป็นหลัก** grid 12 cols ใต้ hall map (35 ที่นั่ง) แบบ B drawer เก็บไว้
+- [T05 Frontend wire — เอาผังฮอลล์ + ผังที่นั่งขึ้น dashboard จริง pills sync สองทาง + fallback](tickets-ux/T05-frontend-wire.md): wire `hallWrap img+svg polygon` + `seatWrap grid 12` ลง `ui/index.html` จริง — กดรูป↔pills sync, `POST /api/events/seats` โหลด `#tableseats` กดเลือกที่นั่ง 4 ใบ ส่ง `seats[]` ใน `book/start`, fallback 403/errcode9/429 ครบ — `TSC:0 121/121`
 
 ## Not yet specified
 
-- (none — frontier clear to T05 wire)
+- (none — map done, all 5 tickets closed)
 
 ## Out of scope
 
