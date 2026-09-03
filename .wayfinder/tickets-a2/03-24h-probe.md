@@ -1,7 +1,7 @@
 # A2-3 — 24h stability probe (วัด ≥95% จริง)
 
 **Type**: task
-**Status**: doing — initial run DONE (blocked cooling) 2026-09-02 15:33
+**Status**: doing — restart 2026-09-03 09:25, 18 events probe
 **Label**: `wayfinder:task`
 **Depends**: 01 (curl-booking ผลลัพธ์), 02 (ip-hygiene กำหนด rate)
 
@@ -18,6 +18,12 @@
 
 **Verify (Destination)**: pass ≥95% ทุก endpoint ตลอด 24 ชม. → map ปิดได้
 
-**Progress 2026-09-02 15:33**: initial `--once` รันแล้ว — `concert 100% (2/2) แต่ zones 0% (0/6) 403 Access Denied` + `discover 12 events แต่ zones 0/12` — IP booking ตก hard deny หลัง baseline 3480/h (ดู `reports/A2-3-24h-probe-initial.md`) → ต้อง cooling 30m แล้ว refresh jar ก่อนรัน 24h จริง (`scripts/a2-3-24h-probe.ts --duration 24h`)
+**Progress 2026-09-02 15:33**: initial `--once` รันแล้ว — `concert 100% (2/2) แต่ zones 0% (0/6) 403 Access Denied` + `discover 12 events แต่ zones 0/12` — IP booking ตก hard deny หลัง baseline 3480/h (ดู `reports/A2-3-24h-probe-initial.md`) → ต้อง cooling 30m แล้ว refresh jar ก่อนรัน 24h จริง
 
-**Progress 2026-09-03 04:09**: `24h loop` กำลังรัน background → `concert 7/7 100% ✅` แต่ `zones 0/15 403` + `fixed 0/2` — IP booking ยัง hard deny ต่อเนื่อง แต่ `discover` heal ได้ `6/12` จาก cache (22h old) ทำให้ UI ยังมีโซนให้ Watch/Book ได้ — ดู `reports/A2-3-24h-probe-running.md` (24 entries, รันต่อถึง 04:09 พรุ่งนี้) — server stay fix `64c062e` แล้ว
+**Progress 2026-09-03 04:09**: รอบ 1 (24 entries) `concert 7/7 100% ✅` แต่ `zones 0/15 403` + `fixed 0/2` — IP booking ยัง hard deny ต่อเนื่อง แต่ `discover` heal ได้ `6/12` จาก cache (22h old) — server stay fix `64c062e` แล้ว
+
+**Progress 2026-09-03 09:30 (restart)**: รอบ 2 — เปลี่ยน probe ให้ load 18 events จาก cache (จาก 3 queries), batch rotation 6, cadence concert 20m + zones 12m — ผล 22 entries ใน 5 นาที: `concert 1/1 100%` + **`zones 0/18 403 ทุก queries ติดกันทันที`** — IP booking hard deny ต่อเนื่อง ≥5 ชม. (จาก 04:05 ถึง 09:30)
+
+**สรุปสำคัญ:** zones booking host hard deny เป็นชั่วโมง ไม่ใช่ burst — ต้อง cache-heal เป็นหลัก (A2-2 hygiene) และ cooling 30m ก่อน on-sale (A2-4 playbook)
+
+**Next**: ปล่อย probe 24h ต่อ — ดู pass% แยกต่อชั่วโมง ถ้า zones คลายใน <24h จะได้ timeline ที่ชัดเจน

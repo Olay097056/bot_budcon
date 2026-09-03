@@ -19,8 +19,33 @@ import { tmpdir } from 'node:os';
 const UA_CURL = 'curl/8.0.1';
 const OUT_DEFAULT = '.wayfinder/reports/a2-3-probe.jsonl';
 const CONCERT_URL = 'https://www.thaiticketmajor.com/concert/';
-const ZONES_QUERIES = ['504', '650', '747']; // 3 ตัวอย่าง: idol1st / อีก 2 จาก discover-cache
-const FIXED_QUERY = '504';
+async function loadZonesQueries(): Promise<string[]> {
+  // ดึงทุก query จาก cache/discover-cache.json เพื่อ probe ครบ 18 events
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const cachePaths = [
+    'cache/discover-cache.json',
+    os.homedir() + '/.bot-budcon-data/discover-cache.json',
+  ];
+  for (const cp of cachePaths) {
+    try {
+      if (!fs.existsSync(cp)) continue;
+      const d = JSON.parse(fs.readFileSync(cp, 'utf-8'));
+      const qs = (d.events ?? []).map((e: any) => String(e.query)).filter(Boolean);
+      if (qs.length > 0) return qs;
+    } catch {}
+  }
+  return ['504', '650', '747']; // fallback
+}
+let ZONES_QUERIES_CACHE: string[] | null = null;
+async function getZonesQueries(): Promise<string[]> {
+  if (ZONES_QUERIES_CACHE) return ZONES_QUERIES_CACHE;
+  ZONES_QUERIES_CACHE = await loadZonesQueries();
+  return ZONES_QUERIES_CACHE;
+}
+let ZONES_QUERIES: string[] = [];
+getZonesQueries().then(qs => { ZONES_QUERIES = qs; console.log(`[probe] zones queries loaded: ${qs.length}`); });
+const FIXED_QUERY = ZONES_QUERIES[0] ?? '504';
 const FIXED_ZONE = 'D1';
 
 function parseArgs() {
@@ -239,6 +264,20 @@ function summarize(outPath: string) {
   console.log(`overall: ${allOk}/${rows.length} = ${(allOk/Math.max(1,rows.length)*100).toFixed(1)}%`);
   const need95 = Object.values(byEp).every(arr=> arr.length===0 || arr.filter(x=>x.ok).length/arr.length >= 0.95);
   console.log(need95 ? '✅ ≥95% per endpoint PASS' : '❌ <95% FAIL');
+
+  // diagnose when zones fail
+  const zonesArr = byEp['zones'] ?? [];
+  const concertArr = byEp['concert'] ?? [];
+  if (zonesArr.length > 0 && zonesArr.filter(x=>x.ok).length === 0 && concertArr.filter(x=>x.ok).length === concertArr.length) {
+    const lastDenies = zonesArr.slice(-3).map(x=>`${x.ts.slice(11,19)} q=${x.query} ${x.status}`).join(' ; ');
+    console.log(`
+[diagnose] zones 0% but concert 100% — likely IP/JS-fingerprint block on booking`);
+    console.log(`  recent denies: ${lastDenies}`);
+    console.log(`  options:`);
+    console.log(`    1. self-hosted runner (home IP, A2-4 playbook) — best`);
+    console.log(`    2. BOT_BUDCON_PROXY=... (paid proxy)`);
+    console.log(`    3. cool 30-60m then retry (A2-2 backoff)`);
+  }
 }
 
 async function main() {
@@ -254,10 +293,15 @@ async function main() {
   } catch (e:any){ console.log('jar load failed', e.message); }
 
   if (once) {
+    await getZonesQueries();
     await runOnce(outPath);
     summarize(outPath);
     return;
   }
+  // wait for cache-loaded queries (max 5s)
+  const t0w = Date.now();
+  while (ZONES_QUERIES.length === 0 && Date.now()-t0w < 5000) await sleep(100);
+  if (ZONES_QUERIES.length === 0) { console.error('ZONES_QUERIES not loaded, abort'); process.exit(1); }
   const t0 = Date.now();
   const tend = t0 + durationMs;
   let nextConcert = t0;
@@ -272,10 +316,16 @@ async function main() {
       const e: Entry = { ts: new Date().toISOString(), epoch: now, endpoint:'concert', status:r.status, bytes:r.bytes, ms:r.ms, ok, detail, ua: UA_CURL };
       appendFileSync(outPath, JSON.stringify(e)+'\n','utf-8');
       console.log(`[${new Date().toISOString().slice(11,19)} concert] ${r.status} ${r.bytes}B ${r.ms}ms ok=${ok} ${detail}`);
-      nextConcert = now + jitter(10*60*1000);
+      nextConcert = now + jitter(20*60*1000);
     }
     if (now >= nextZones) {
-      for (const q of ZONES_QUERIES) {
+      // rotate batch of BATCH_SIZE queries per cycle — 18 queries / 6 batch = 3 cycles/18
+      const BATCH = 6;
+      const total = ZONES_QUERIES.length || 1;
+      const offset = ((cycles % Math.ceil(total / BATCH)) * BATCH) % total;
+      const batch = ZONES_QUERIES.slice(offset, offset + BATCH);
+      const actualBatch = batch.length === BATCH ? batch : [...batch, ...ZONES_QUERIES.slice(0, BATCH - batch.length)];
+      for (const q of actualBatch) {
         const ck = jarFor('booking.thaiticketmajor.com');
         const url = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${q}`;
         const r = curlProbe(url, { 'User-Agent': UA_CURL, 'Cookie': ck, 'Referer':'https://www.thaiticketmajor.com/' });
@@ -283,9 +333,9 @@ async function main() {
         const e: Entry = { ts:new Date().toISOString(), epoch: Date.now(), endpoint:'zones', query:q, status:r.status, bytes:r.bytes, ms:r.ms, ok, detail, ua:UA_CURL };
         appendFileSync(outPath, JSON.stringify(e)+'\n','utf-8');
         console.log(`[${new Date().toISOString().slice(11,19)} zones q=${q}] ${r.status} ${r.bytes}B ok=${ok} ${detail}`);
-        await sleep(900);
+        await sleep(1200); // 6 batch × 1.2s = 7.2s, ใส่ใน 12m = 84 req/h ต่อ zones
       }
-      nextZones = now + jitter(15*60*1000);
+      nextZones = now + jitter(12*60*1000); // 5/h × 6 batch = 30 req/h ต่อ zones
     }
     if (now >= nextFixed) {
       try {
