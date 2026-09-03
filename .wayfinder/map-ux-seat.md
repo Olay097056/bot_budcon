@@ -13,6 +13,7 @@ Dashboard `bot_budcon` โชว์ผังจริงจาก TTM ได้�
 
 - [T01 Live TTM HTML probe — รูปผังฮอลล์ + coords + ตารางที่นั่ง มีอะไรให้ดึงสดบ้าง](tickets-ux/T01-live-html-probe.md): สดวันนี้ `concert 200` แต่ `zones+fixed` 403 hard deny 414B ไม่มี `<img>/<area>/#tableseats` ให้ parse — cache 21h old 8 zones heal ได้แต่ยังไม่มี `hallImageUrl/areas` ต้องรอ T03 เติม `parseHallImage/parseAreas` regex + heal เดียวกับ zones
 - [T02 Hall map UX prototype — กดบนรูปเลือกโซนได้ + pills sync สองทาง](tickets-ux/T02-hall-map-prototype.md): สร้าง A+B 2 แบบ — **เลือก A เป็นหลัก** `map-wrap 590×420 img+svg polygon overlay hover cyan active cyan glow` pills ล่าง sync + seat-grid ใต้รูป, B เป็น split tier เก็บไว้
+- [T03 Backend — ดึง imageUrl + area coords + rounds/k จาก zones.php แบบ realtime ไม่ hardcode](tickets-ux/T03-backend-hall-image.md): เพิ่ม `parseHallImage/parseAreas` + `DiscoveredEvent hallImageUrl/areas[]` + heal เดียวกับ zones + `preview` ส่ง `hallImageUrl/areas` + migration cache เก่า — `TSC:0 121 tests`
 
 ## Not yet specified
 

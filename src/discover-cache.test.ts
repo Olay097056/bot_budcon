@@ -12,12 +12,10 @@ import { config } from '../src/config.js';
 const tmpData = mkdtempSync(join(tmpdir(), 'budcon-cache-'));
 (config as unknown as { dataDir: string }).dataDir = tmpData;
 
-const ev = (query: string, zones: string[] = ['A1']): ({
-  query: string; slug: string; title: string; zonesUrl: string; zones: string[]; rounds: string[]; k: string | null;
-}) => ({
+const ev = (query: string, zones: string[] = ['A1']): any => ({
   query, slug: `${query}.html`, title: `Event ${query}`,
   zonesUrl: `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${query}`,
-  zones, rounds: ['81634'], k: 'k123',
+  zones, rounds: ["81634"], k: "k123", hallImageUrl: null, areas: [],
 });
 
 beforeEach(() => {

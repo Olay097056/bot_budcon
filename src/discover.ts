@@ -42,6 +42,10 @@ export interface DiscoveredEvent {
   rounds: string[];
   /** Hidden input `k` value if present (needed to build fixed.php url). */
   k: string | null;
+  /** Hall map image absolute URL from zones.php <img usemap> — null if none / 403 */
+  hallImageUrl: string | null;
+  /** Hall map areas from <map><area> — empty if none */
+  areas: { code: string; href: string; coords: number[]; shape: string }[];
 }
 
 export interface DiscoverResult {
@@ -129,6 +133,42 @@ function parseK(html: string): string | null {
     ?? html.match(/\bk\s*=\s*["']([^"']+)["']/i);
   return m ? (m[1] ?? '').trim() || null : null;
 }
+
+function parseHallImage(html: string): string | null {
+  const imgTags = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]!);
+  const withMap = imgTags.filter((s) => /usemap/i.test(s));
+  const src = withMap[0]?.match(/\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
+  if (!src) return null;
+  try {
+    return new URL(src, 'https://booking.thaiticketmajor.com').toString();
+  } catch {
+    return src;
+  }
+}
+
+function parseAreas(html: string): { code: string; href: string; coords: number[]; shape: string }[] {
+  const out: { code: string; href: string; coords: number[]; shape: string }[] = [];
+  const seen = new Set<string>();
+  const mapBlocks = [...html.matchAll(/<map[^>]*>([\s\S]*?)<\/map>/gi)];
+  const search = mapBlocks.length ? mapBlocks.map((b) => b[1]!).join('\n') : html;
+  const areaTags = [...search.matchAll(/<area\b[^>]*>/gi)].map((m) => m[0]!);
+  for (const tag of areaTags) {
+    const href = tag.match(/href=["']([^"']+)["']/i)?.[1] ?? '';
+    const m = href.match(/#(?:fixed|festival)\.php#([A-Za-z0-9]+)/i);
+    const code = m ? m[1]!.toUpperCase() : '';
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    const shape = tag.match(/shape=["']([^"']+)["']/i)?.[1] ?? 'poly';
+    const coordsStr = tag.match(/coords=["']([^"']+)["']/i)?.[1] ?? '';
+    const coords = coordsStr
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => !Number.isNaN(n));
+    out.push({ code, href, coords, shape });
+  }
+  return out;
+}
+
 
 export async function discoverEvents(opts: {
   fetcher?: (url: string) => Promise<{ status: number; body: string; finalUrl?: string }>;
@@ -218,7 +258,7 @@ export async function discoverEvents(opts: {
         // Keep the event but mark empty zones / warning — UI still
         // shows it so manual query works even if zones need a round.
         warnings.push(`${item.query}: zones http ${r.status}`);
-        events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones: [], rounds: [], k: null });
+        events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones: [], rounds: [], k: null, hallImageUrl: null, areas: [] });
         continue;
       }
       // Detect TTM meta-refresh redirect to login (happens with cookie-less fetch)
@@ -229,11 +269,11 @@ export async function discoverEvents(opts: {
       const zones = parseZones(r.body).map((z) => z.code);
       const rounds = parseRounds(r.body);
       const k = parseK(r.body);
-      events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones, rounds, k });
+      events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones, rounds, k, hallImageUrl: parseHallImage(r.body), areas: parseAreas(r.body) });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       warnings.push(`${item.query}: ${msg}`);
-      events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones: [], rounds: [], k: null });
+      events.push({ query: item.query, slug: item.slug, title: item.title, zonesUrl, zones: [], rounds: [], k: null, hallImageUrl: null, areas: [] });
     }
   }
   // Ticket 18: cache-or-merge — persist every successful live discover,
@@ -282,6 +322,7 @@ export async function discoverEvents(opts: {
     if (cache.events.length > 0 && cache.source !== 'none') {
       const cacheByQuery = new Map(cache.events.map(e=>[e.query, e] as const));
       let healed = 0;
+      let hallHealed = 0;
       for (const ev of liveResult.events) {
         if (ev.zones.length===0) {
           const c = cacheByQuery.get(ev.query);
@@ -289,7 +330,17 @@ export async function discoverEvents(opts: {
             ev.zones = [...c.zones];
             ev.rounds = c.rounds.length? [...c.rounds] : ev.rounds;
             ev.k = c.k ?? ev.k;
+            // heal hall image/areas alongside zones
+            if (!ev.hallImageUrl && (c as any).hallImageUrl) { ev.hallImageUrl = (c as any).hallImageUrl; hallHealed++; }
+            if ((!ev.areas || ev.areas.length===0) && (c as any).areas?.length) { ev.areas = [...(c as any).areas]; }
             healed++;
+          }
+        } else {
+          // live had zones but hall image may still be empty (403 partial) — heal hall separately
+          const c = cacheByQuery.get(ev.query);
+          if (c) {
+            if (!ev.hallImageUrl && (c as any).hallImageUrl) { ev.hallImageUrl = (c as any).hallImageUrl; hallHealed++; }
+            if ((!ev.areas || ev.areas.length===0) && (c as any).areas?.length) { ev.areas = [...(c as any).areas]; }
           }
         }
       }
@@ -318,4 +369,4 @@ export async function discoverEvents(opts: {
 }
 
 // re-export for test introspection (not public API)
-export const _internal = { extractConcertListing, parseRounds, parseK, buildZonesUrl };
+export const _internal = { extractConcertListing, parseRounds, parseK, parseHallImage, parseAreas, buildZonesUrl };

@@ -46,6 +46,11 @@ export function loadDiscoverCache(repoPath: string = REPO_CACHE): CacheInfo {
       if (!existsSync(path)) continue;
       const j = JSON.parse(readFileSync(path, 'utf-8')) as DiscoverResult;
       if (j.events && j.events.length > 0) {
+        // migration: old cache without hallImageUrl/areas still loads — fill defaults
+        for (const e of j.events as any[]) {
+          if (e.hallImageUrl === undefined) e.hallImageUrl = null;
+          if (!Array.isArray(e.areas)) e.areas = [];
+        }
         return { events: j.events, fetchedAtMs: j.fetchedAtMs ?? null, source };
       }
     } catch { /* corrupt file — try next layer */ }

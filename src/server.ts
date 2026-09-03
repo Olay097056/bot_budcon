@@ -423,6 +423,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       let zones = r.status >= 200 && r.status < 300 ? pz(bodyText).map((z) => z.code) : [];
       let rounds = r.status >= 200 && r.status < 300 ? (di as unknown as { parseRounds: (s: string) => string[] }).parseRounds(bodyText) : [];
       let k = r.status >= 200 && r.status < 300 ? (di as unknown as { parseK: (s: string) => string | null }).parseK(bodyText) : null;
+      let hallImageUrl: string | null = r.status >= 200 && r.status < 300 ? (di as unknown as { parseHallImage: (s: string) => string | null }).parseHallImage(bodyText) : null;
+      let areas: { code: string; href: string; coords: number[]; shape: string }[] = r.status >= 200 && r.status < 300 ? (di as unknown as { parseAreas: (s: string) => { code: string; href: string; coords: number[]; shape: string }[] }).parseAreas(bodyText) : [];
       const isLoginRedirect = bodyText.length < 400 && /url=\s*\/?user\/signin\.php/i.test(bodyText);
       const isWaf = bodyText.includes('waf-verify') || bodyText.includes('Access Denied') || r.status === 403;
       // Cache fallback when WAF blocks preview — unified backbone (ticket 18)
@@ -435,13 +437,15 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
             zones = hit.zones;
             rounds = hit.rounds;
             k = hit.k;
+            hallImageUrl = (hit as any).hallImageUrl ?? hallImageUrl;
+            areas = (hit as any).areas?.length ? (hit as any).areas : areas;
           }
         } catch {}
       }
       const warnings: string[] = [];
       if (isWaf) warnings.push('live fetch WAF-blocked — serving cached zones if available');
       if (isLoginRedirect) warnings.push('zones redirected to signin (cookies may be stale)');
-      json(res, 200, { query: q || query, zonesUrl, status, zones, rounds, k, loginRedirect: isLoginRedirect, finalUrl: r.finalUrl ?? zonesUrl, warnings });
+      json(res, 200, { query: q || query, zonesUrl, status, zones, rounds, k, hallImageUrl, areas, loginRedirect: isLoginRedirect, finalUrl: r.finalUrl ?? zonesUrl, warnings });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       json(res, 500, { error: msg, zonesUrl });

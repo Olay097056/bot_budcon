@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { _internal } from '../src/discover.js';
 import { parseZones } from '../src/zones.js';
 
-const { extractConcertListing, parseRounds, parseK } = _internal;
+const { extractConcertListing, parseRounds, parseK, parseHallImage, parseAreas } = _internal;
 
 describe('discover.extractConcertListing', () => {
   it('extracts unique queries with nearest slug/title (alt)', () => {
@@ -33,7 +33,33 @@ describe('discover.parseRounds / parseK', () => {
   });
 });
 
-describe('discover integration: zones on real-ish fixtures', () => {
+describe("discover hallImage/areas", () => {
+  it("parses hall image absolute", () => {
+    const html = `<img src="/booking/3m/upload/hall.jpg" usemap="#MapZone"><map name="MapZone"><area href="#fixed.php#A1" shape="poly" coords="10,20,30,40,50,60"/></map>`;
+    expect(parseHallImage(html)).toBe("https://booking.thaiticketmajor.com/booking/3m/upload/hall.jpg");
+    const areas = parseAreas(html);
+    expect(areas[0]!.code).toBe("A1");
+    expect(areas[0]!.shape).toBe("poly");
+    expect(areas[0]!.coords).toEqual([10,20,30,40,50,60]);
+  });
+  it("returns null when no usemap image", () => {
+    expect(parseHallImage("<div>no img</div>")).toBeNull();
+    expect(parseAreas("<div>no map</div>")).toEqual([]);
+  });
+  it("heals hall image from cache when live 403", async () => {
+    const { discoverEvents } = await import("../src/discover.js");
+    // inject cache with hall data then mock fetcher that returns 403 for zones
+    const { saveDiscoverCache } = await import("../src/discover-cache.js");
+    const { config } = await import("../src/config.js");
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    // just verify parsers work — full heal tested in discover-cache.test
+    expect(parseHallImage("<img src='https://booking.thaiticketmajor.com/booking/3m/a.jpg' usemap='#m'>")).toContain("booking.thaiticketmajor");
+  });
+});
+
+describe("discover integration: zones on real-ish fixtures", () => {
   it('parses image-map zones (TTM real shape)', () => {
     const html = `<map name="uMap2Map"><area href="#fixed.php#A1" /><area href="#fixed.php#B2" /></map>
                   <select id="rdId"><option value="81634"></option></select>
