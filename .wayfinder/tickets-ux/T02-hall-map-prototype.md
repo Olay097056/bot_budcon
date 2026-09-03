@@ -2,7 +2,7 @@
 id: T02
 title: Hall map UX prototype — กดบนรูปเลือกโซนได้ + pills sync สองทาง
 type: prototype
-status: open
+status: closed
 blocks: [T05]
 blocked_by: []
 ---
@@ -28,3 +28,13 @@ blocked_by: []
 
 - `ui/prototype-hall-a.html`, `ui/prototype-hall-b.html` (2 แบบ) + ภาพ screenshot หรือคำอธิบายเลือกแบบหนึ่ง
 - สรุปใน issue: เลือกแบบไหน + เหตุผล + spec สั้นๆ ให้ T05 ไปทำจริง
+
+## Resolution 2026-09-03 — T02 closed ✅ — เลือกแบบ A เป็นหลัก, B เป็นทางเลือก
+
+**Prototype A** (`ui/prototype-hall-a.html` 11KB): `map-wrap` เต็มความกว้าง 590×420 `img + svg polygon` overlay `fill rgba + stroke` hover `cyan` active `cyan 92% + glow`, pills ล่าง sync สองทาง, `seat-grid` 12 cols ใต้รูป (mock 24 seats `free/taken/picked`), states `loading/healed/ok/empty` ครบ — อ่านง่ายสุดบน 860px single column ไม่ต้อง split
+
+**Prototype B** (`ui/prototype-hall-b.html` 10KB): split `1.55fr/.85fr` รูปซ้าย chips ขวา tier A/B/C แยก + bar ว่าง, seat-grid แถวสั้น — เลือกเร็วแต่แคบบนมือถือ ต้อง responsive ซับซ้อนกว่า
+
+**Decision**: **เอา A เป็นหลัก** — ตรง brief "เห็นภาพเวลาเลือกโซน" ชัดกว่า (รูปใหญ่เต็ม), sync `svg polygon active ↔ pill active` สี `cyan` (map) / `paper` (pills) เท่ากัน, `seat-grid` อยู่ใต้รูปไม่บัง hall — T05 จะ wire แบบ A ลง `ui/index.html` จริง (ใช้ `svg polygon` จาก `areas[].coords` scale ตาม `viewBox`) + เก็บ B ไว้เป็นทางเลือกถ้าอยากทำ split ทีหลัง
+
+Evidence: `ui/prototype-hall-a.html`, `ui/prototype-hall-b.html` เปิดด้วย `desktop_preview` ได้ทันที

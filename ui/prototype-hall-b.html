@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Prototype B — Split hall + sticky pills</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--void:#070A14;--panel:#11162A;--line:#232946;--paper:#F0EDE8;--muted:#8A8FA3;--muted2:#5A6080;--cyan:#00E5FF;--amber:#FFB800;--green:#00D68F}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"IBM Plex Sans Thai",system-ui,sans-serif;background:var(--void);color:var(--paper);line-height:1.5;padding:24px}
+.shell{max-width:860px;margin:0 auto}
+.panel{background:linear-gradient(180deg,#11162A,#12162B);border:1px solid var(--line);border-radius:14px;padding:14px}
+.badge{padding:3px 9px;border-radius:999px;font-size:11px;border:1px solid rgba(0,229,255,.25);background:rgba(0,229,255,.12);color:var(--cyan)}
+.layout{display:grid;grid-template-columns:1.55fr .85fr;gap:12px;margin-top:10px}
+@media(max-width:700px){ .layout{grid-template-columns:1fr} }
+.map-card{border-radius:12px;overflow:hidden;background:#0B0F1E;border:1px solid var(--line);position:relative}
+.map-card img{width:100%;display:block;opacity:.92}
+.map-card svg{position:absolute;inset:0;width:100%;height:100%}
+.poly{fill:rgba(255,255,255,.05);stroke:rgba(255,255,255,.16);stroke-width:1.2;cursor:pointer}
+.poly:hover{fill:rgba(255,184,0,.18);stroke:var(--amber)}
+.poly.active{fill:var(--amber);stroke:var(--amber);filter:drop-shadow(0 0 8px rgba(255,184,0,.55))}
+.poly.active + text{fill:#1a1200}
+.lab{pointer-events:none;font-family:"JetBrains Mono",monospace;font-size:10px;fill:var(--paper);font-weight:600;text-anchor:middle;dominant-baseline:middle}
+.side{display:flex;flex-direction:column;gap:8px}
+.side h4{margin:0;font-size:12px;color:var(--muted);letter-spacing:.03em}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03);font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);cursor:pointer;min-width:54px;text-align:center}
+.chip:hover{color:var(--paper);border-color:#2A3358}
+.chip.active{background:var(--amber);color:#1a1200;border-color:var(--amber);font-weight:700}
+.tier{font-size:11px;color:var(--muted2);margin:2px 0 4px;padding-left:2px}
+.seat-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.seat{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-family:"JetBrains Mono",monospace;font-size:10px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer}
+.seat.free{background:rgba(0,214,143,.14);border-color:rgba(0,214,143,.3);color:var(--paper)}
+.seat.taken{background:rgba(138,143,163,.1);color:var(--muted2);cursor:not-allowed;border-color:transparent}
+.seat.picked{background:var(--amber);border-color:var(--amber);color:#1a1200;font-weight:700}
+.bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden;display:flex;margin-top:6px}
+.bar i{height:100%;background:var(--green)}
+.note{font-size:12px;color:var(--muted)} .note.ok{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <div style="font-family:Sora;font-weight:700">Prototype B — Split hall + sticky pills</div>
+    <span class="badge" style="margin-left:auto">realtime hallImageUrl</span>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin:0 2px 10px">แบบ B เน้น "เลือกเร็ว" — รูปซ้าย pills ขวาเป็นคอลัมน์ (tier A/B/C แยก), seat-grid เป็นแถวสั้นใต้รูป ไม่ต้อง scroll มาก, สี active เป็น amber ทั้งรูปและ pills</div>
+
+  <div class="panel">
+    <div style="font-weight:700">ขั้น 3 — เลือกโซนและจอง</div>
+    <div class="note" id="label">กดบนรูปหรือกด chip ขวา — sync สองทาง</div>
+
+    <div class="layout">
+      <div class="map-card" style="aspect-ratio:590/420">
+        <img src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=590&h=420&fit=crop" alt="hall"/>
+        <svg id="svg" viewBox="0 0 590 420" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="side">
+        <div>
+          <h4>โซน — TIER A</h4>
+          <div class="chips" id="chipsA"></div>
+        </div>
+        <div>
+          <h4>TIER B</h4>
+          <div class="chips" id="chipsB"></div>
+        </div>
+        <div>
+          <h4>TIER C</h4>
+          <div class="chips" id="chipsC"></div>
+        </div>
+        <div style="margin-top:8px;padding:10px;background:#070A14;border:1px solid var(--line);border-radius:10px">
+          <div style="font-size:12px">โซนที่เลือก: <b id="sel" style="color:var(--amber)">—</b></div>
+          <div class="bar"><i id="bar" style="width:0%"></i></div>
+          <div style="font-size:11px;color:var(--muted2);margin-top:4px" id="avail">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="seatBox" style="display:none;margin-top:12px;padding:10px;background:#070A14;border:1px solid var(--line);border-radius:10px">
+      <div style="font-size:13px;font-weight:600">ที่นั่งโซน <span id="sZone" style="color:var(--amber)">—</span> <span style="font-weight:400;color:var(--muted)" id="sMeta">· 18 ว่าง</span></div>
+      <div class="seat-row" id="seatRow"></div>
+      <div class="note" id="sNote" style="margin-top:6px">เลือก 0/1 ใบ</div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button id="book" disabled style="padding:11px 18px;border-radius:999px;border:1px solid var(--paper);background:var(--paper);color:var(--void);font-weight:700">จองเลย — โซน —</button>
+      <span class="note" id="bNote" style="align-self:center">เลือกโซนก่อน</span>
+    </div>
+  </div>
+  <div class="note" style="margin-top:8px">States: <button class="chip" onclick="toast('healed')">403 healed</button> <button class="chip" onclick="toast('ok')">ok</button> ลองกดรูป vs chip — ต้อง sync</div>
+</div>
+<script>
+const groups = {A:['A1','A2','A3'], B:['B1','B2','B3'], C:['C1','C2','D1','D2','E1','E2']};
+const polys = [
+  {code:'A1', poly:[20,20, 180,20, 180,110, 20,110]},
+  {code:'A2', poly:[200,20, 360,20, 360,110, 200,110]},
+  {code:'A3', poly:[380,20, 540,20, 540,110, 380,110]},
+  {code:'B1', poly:[20,130, 180,130, 180,220, 20,220]},
+  {code:'B2', poly:[200,130, 360,130, 360,220, 200,220]},
+  {code:'B3', poly:[380,130, 540,130, 540,220, 380,220]},
+  {code:'C1', poly:[80,240, 260,240, 260,320, 80,320]},
+  {code:'C2', poly:[320,240, 500,240, 500,320, 320,320]},
+  {code:'D1', poly:[120,340, 240,340, 240,400, 120,400]},
+  {code:'D2', poly:[260,340, 380,340, 380,400, 260,400]},
+  {code:'E1', poly:[400,340, 480,340, 480,400, 400,400]},
+  {code:'E2', poly:[500,340, 570,340, 570,400, 500,400]},
+];
+let sel=null, picked=new Set();
+const svg=document.getElementById('svg');
+function render(){
+  svg.innerHTML='';
+  polys.forEach(a=>{
+    const p=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    p.setAttribute('points', a.poly.join(',')); p.setAttribute('class','poly'+(sel===a.code?' active':''));
+    p.onclick=()=> choose(a.code);
+    svg.appendChild(p);
+    const cx=a.poly.filter((_,i)=>i%2===0).reduce((s,v)=>s+v,0)/(a.poly.length/2);
+    const cy=a.poly.filter((_,i)=>i%2===1).reduce((s,v)=>s+v,0)/(a.poly.length/2);
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',cx); t.setAttribute('y',cy); t.setAttribute('class','lab');
+    t.textContent=a.code; svg.appendChild(t);
+  });
+  for(const k of ['A','B','C']){
+    const el=document.getElementById('chips'+k); el.innerHTML='';
+    groups[k].forEach(code=>{
+      const b=document.createElement('button');
+      b.className='chip'+(sel===code?' active':''); b.textContent=code;
+      b.onclick=()=> choose(code); el.appendChild(b);
+    });
+  }
+  document.getElementById('sel').textContent=sel||'—';
+  document.getElementById('book').textContent=sel?`จองเลย — โซน ${sel}`:'จองเลย — โซน —';
+  document.getElementById('book').disabled=!sel;
+  document.getElementById('bNote').textContent=sel?`เลือกโซน ${sel} แล้ว`:'เลือกโซนก่อน';
+  const box=document.getElementById('seatBox');
+  if(sel){ box.style.display=''; document.getElementById('sZone').textContent=sel; renderSeats(); document.getElementById('avail').textContent='ว่าง 18/24'; document.getElementById('bar').style.width='75%'; }
+  else { box.style.display='none'; document.getElementById('avail').textContent='—'; document.getElementById('bar').style.width='0%'; }
+}
+function choose(code){ sel=code; picked=new Set(); render(); }
+function renderSeats(){
+  const row=document.getElementById('seatRow'); row.innerHTML='';
+  for(let i=0;i<18;i++){
+    const taken=[2,7,11].includes(i);
+    const title=`${sel}-${String(i+1).padStart(2,'0')}`;
+    const d=document.createElement('div');
+    d.className='seat '+(taken?'taken': picked.has(title)?'picked':'free');
+    d.textContent=String(i+1);
+    if(!taken) d.onclick=()=>{ if(picked.has(title)) picked.delete(title); else {picked.clear(); picked.add(title);} document.getElementById('sNote').textContent=`เลือก ${picked.size}/1 ใบ`; renderSeats(); };
+    row.appendChild(d);
+  }
+  document.getElementById('sNote').textContent=`เลือก ${picked.size}/1 ใบ`;
+}
+function toast(s){ document.getElementById('label').textContent = s==='healed' ? 'ข้อมูลเก่า — cached 21h — healed zones from cache (live 403)' : 'เลือกโซนบนรูปหรือกด chip ขวา — sync สองทาง'; }
+render();
+</script>
+</body>
+</html>
