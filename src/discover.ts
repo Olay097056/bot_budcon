@@ -241,7 +241,7 @@ export async function discoverEvents(opts: {
   // (live wins per query). Staleness is surfaced, never hidden.
   const totalLiveZones = events.reduce((a,e)=>a+e.zones.length,0);
   const liveResult: DiscoverResult = { fetchedAtMs: Date.now(), concertUrl, events, warnings: [...warnings] };
-  const shouldSave = events.length > 0 && (totalLiveZones > 0 || warnings.length === 0);
+  const shouldSave = events.length > 0 && totalLiveZones > 0;
   if (shouldSave) {
     saveDiscoverCache(liveResult);
   } else if (events.length === 0) {
