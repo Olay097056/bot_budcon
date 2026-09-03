@@ -29,6 +29,16 @@ const engine = new BotEngine();
 
 const UI_DIR = resolve('ui');
 
+/** Preview rate-limit: 1 per 30s per query (hygiene A2-2) */
+const previewLast = new Map<string, number>();
+function previewRateLimited(query: string): boolean {
+  const now = Date.now();
+  const last = previewLast.get(query) ?? 0;
+  if (now - last < 30_000) return true;
+  previewLast.set(query, now);
+  return false;
+}
+
 /** Last re-login state (ticket 11). Updated by /api/auth/relogin. */
 let lastRelogin: AutoReloginState = {
   lastResult: 'no_need',
@@ -396,6 +406,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     if (!zonesUrl.startsWith('http')) zonesUrl = `https://booking.thaiticketmajor.com/booking/3m/zones.php?query=${encodeURIComponent(zonesUrl)}`;
+    const qForLimit = (() => { try { return new URL(zonesUrl!).searchParams.get('query') ?? query; } catch { return query; } })();
+    if (qForLimit && previewRateLimited(qForLimit)) {
+      json(res, 429, { error: 'preview rate-limited: 1 per 30s per query', query: qForLimit, retryAfterSec: 30 });
+      return;
+    }
     try {
       const q = (() => { try { return new URL(zonesUrl!).searchParams.get('query') ?? ''; } catch { return ''; } })();
       const { parseZones: pz } = await import('./zones.js');
