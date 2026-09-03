@@ -19,3 +19,5 @@
 **Verify (Destination)**: pass ≥95% ทุก endpoint ตลอด 24 ชม. → map ปิดได้
 
 **Progress 2026-09-02 15:33**: initial `--once` รันแล้ว — `concert 100% (2/2) แต่ zones 0% (0/6) 403 Access Denied` + `discover 12 events แต่ zones 0/12` — IP booking ตก hard deny หลัง baseline 3480/h (ดู `reports/A2-3-24h-probe-initial.md`) → ต้อง cooling 30m แล้ว refresh jar ก่อนรัน 24h จริง (`scripts/a2-3-24h-probe.ts --duration 24h`)
+
+**Progress 2026-09-03 04:09**: `24h loop` กำลังรัน background → `concert 7/7 100% ✅` แต่ `zones 0/15 403` + `fixed 0/2` — IP booking ยัง hard deny ต่อเนื่อง แต่ `discover` heal ได้ `6/12` จาก cache (22h old) ทำให้ UI ยังมีโซนให้ Watch/Book ได้ — ดู `reports/A2-3-24h-probe-running.md` (24 entries, รันต่อถึง 04:09 พรุ่งนี้) — server stay fix `64c062e` แล้ว
