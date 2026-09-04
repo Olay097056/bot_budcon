@@ -11,12 +11,15 @@
 
 ## Decisions so far
 
+- [C02 cookie jar → Firefox hand-off](tickets-curlfirst/C02-cookie-jar-handoff.md): mapping sameSite secure?None:Lax + curl -c write-back + _abck A/B plan
+- [C01 curl zone-seat path](tickets-curlfirst/C01-curl-zone-seat.md): curlBook() ครบ zones→fixed→validateseat + fresh-session retry (stale jar 403 → no-cookie 200 พิสูจน์แล้ว) + wire fallback ใน book() — 741 ทดสอบได้ 'no k/round' ถูกต้อง
+
 - [C02 cookie jar → Firefox hand-off](tickets-curlfirst/C02-cookie-jar-handoff.md): mapping พร้อม implement (sameSite กฎ secure?None:Lax) + แก้ blocker Set-Cookie ด้วย curl -c write-back — เสี่ยงหลักคือ _abck fingerprint mismatch ต้อง A/B ทดสอบ
 
 ## Not yet specified
 
-- validateseat ผ่าน curl แล้ว session ผูกกับ jar — Firefox ต้องใช้ jar เดียวกัน (แปลง cookie curl→Firefox profile) ถึงเห็นตะกร้า
-- ถ้า TTM เปลี่ยนให้ fixed.php ตรวจ fingerprint ตอนโหลดที่นั่ง ต้อง fallback ยังไง
+- คำตอบ _abck A/B (sync หมด vs ตัด) — เฉลยตอน C03 ทดสอบจริง
+- ตรวจ Set-Cookie หลัง validateseat จริง (curl -c write-back ยังไม่ได้ผูกเข้า saveCookies)
 
 ## Out of scope
 
