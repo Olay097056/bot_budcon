@@ -206,3 +206,77 @@ export function curlBook(opts: {
 
   return { ok: true, step: 'done', k, round, zone: opts.code, seats: picks, jar: cookies };
 }
+
+
+/**
+ * C03 — curl-first logic บน transport ที่ inject ได้ (hardenedFetcher = server session)
+ * flow เดียวกับ curlBook แต่ fetch เป็น async และ cookie มาจาก transport
+ */
+export async function curlBookWithFetcher(opts: {
+  zonesUrl: string;
+  code: string;
+  quantity?: number;
+  fetcher: (url: string, init?: { headers?: Record<string, string>; method?: string; body?: string }) => Promise<{ status: number; body: string }>;
+}): Promise<CurlBookResult> {
+  const qty = opts.quantity ?? 1;
+  const q = new URL(opts.zonesUrl).searchParams.get('query') ?? '';
+
+  // STEP 1: zones
+  const z = await opts.fetcher(opts.zonesUrl);
+  if (z.status !== 200 || z.body.includes('Access Denied') || z.body.includes('signin.php')) {
+    return { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: `zones http ${z.status}${z.body.includes('Access Denied') ? ' Access Denied' : z.body.includes('signin.php') ? ' signin-bounce' : ''}`, jar: [] };
+  }
+  const k = extractK(z.body);
+  const rounds = extractRounds(z.body);
+  if (!k || rounds.length === 0) {
+    return { ok: false, step: 'zones', k, round: '', zone: opts.code, seats: [], error: 'no k/round — sale not open', jar: [] };
+  }
+  const round = rounds[0] as string;
+
+  // STEP 2: fixed.php
+  const fixedUrl = `https://booking.thaiticketmajor.com/booking/3m/fixed.php?k=${encodeURIComponent(k)}&zone=${encodeURIComponent(opts.code)}&round=${encodeURIComponent(round)}`;
+  const f = await opts.fetcher(fixedUrl, { headers: { Referer: opts.zonesUrl } });
+  if (f.status !== 200 || !f.body.includes('id="tableseats"') || f.body.includes('errcode=9')) {
+    return { ok: false, step: 'fixed', k, round, zone: opts.code, seats: [], error: `fixed http ${f.status} tableseats=${f.body.includes('id="tableseats"')} err9=${f.body.includes('errcode=9')}`, jar: [] };
+  }
+  const allSeats = parseSeats(f.body);
+  if (allSeats.length < qty) {
+    return { ok: false, step: 'fixed', k, round, zone: opts.code, seats: allSeats, error: `free seats ${allSeats.length} < ${qty}`, jar: [] };
+  }
+  const picks = allSeats.slice(0, qty);
+
+  // STEP 3: validateseat
+  const frm = f.body.match(/<form[^>]*id="frmPayment"[^>]*>([\s\S]*?)<\/form>/i);
+  const payload: Record<string, string> = {};
+  if (frm) {
+    for (const im of (frm[1] as string).matchAll(/<input[^>]*>/gi)) {
+      const nm = im[0].match(/name="([^"]+)"/)?.[1];
+      if (nm) payload[nm] = im[0].match(/value="([^"]*)"/)?.[1] ?? '';
+    }
+  }
+  payload['ehId'] = payload['ehId'] || q;
+  payload['zone'] = opts.code;
+  payload['rdId'] = round;
+  let data = Object.entries(payload).map(([a, b]) => `${encodeURIComponent(a)}=${encodeURIComponent(b)}`).join('&');
+  for (const s of picks) data += `&chkSeats%5B%5D=${encodeURIComponent(s.seatVal)}`;
+  const first = (picks[0] as CurlSeat).title.split('-');
+  data += `&row=${encodeURIComponent(first[0] ?? '')}&seat=${encodeURIComponent(first[1] ?? '')}&book_type=fix`;
+
+  const vUrl = `https://booking.thaiticketmajor.com/booking/3m/validateseat.php?k=${encodeURIComponent(k)}&zw=${encodeURIComponent(opts.code)}`;
+  const v = await opts.fetcher(vUrl, {
+    method: 'POST',
+    headers: {
+      'Referer': fixedUrl,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+    },
+    body: data,
+  });
+  let vOk = false;
+  try { vOk = v.status === 200 && JSON.parse(v.body)?.result === true; } catch {}
+  if (!vOk) {
+    return { ok: false, step: 'validateseat', k, round, zone: opts.code, seats: picks, error: `validateseat http ${v.status} body=${v.body.slice(0, 120)}`, jar: [] };
+  }
+  return { ok: true, step: 'done', k, round, zone: opts.code, seats: picks, jar: [] };
+}

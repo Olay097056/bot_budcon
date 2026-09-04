@@ -22,7 +22,8 @@ import type { BrowserContext, Page } from 'playwright';
 import type { StoredCookie } from './cookies.js';
 import { loadCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
-import { curlBook } from './curl-book.js';
+import { curlBook, curlBookWithFetcher } from './curl-book.js';
+import { hardenedFetcher } from './ttm-fetch.js';
 
 export interface BookOptions {
   context: BrowserContext;
@@ -116,7 +117,23 @@ export async function book(opts: BookOptions): Promise<BookResult> {
     // C01 curl-first fallback: Firefox fingerprint โดน Akamai 403 (Access Denied /
     // signin bounce) แต่ curl/8.0.1 + jar ผ่าน (A2-1 proof) — ลอง curl ถึงขั้น
     // validateseat แล้ว hand-off Firefox ไปหน้า payment ด้วย session เดียวกัน
-    const fb = curlBook({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty });
+    let fb: ReturnType<typeof curlBook> | Awaited<ReturnType<typeof curlBookWithFetcher>>;
+    const isLiveTtm = /booking\.thaiticketmajor\.com\/booking\/3m\/zones\.php/.test(opts.zonesUrl);
+    if (isLiveTtm) {
+      fb = curlBook({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty });
+    } else {
+      // unit test / non-TTM URL — ไม่ยิง network จริง
+      fb = { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: 'skip fallback (non-TTM url)', jar: [] };
+    }
+    if (!fb.ok && isLiveTtm) {
+      // curl ตรงไม่ผ่าน (เช่น signin bounce) — ลองผ่าน hardenedFetcher (server session สด)
+      try {
+        const fetcher = hardenedFetcher();
+        fb = await curlBookWithFetcher({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty, fetcher });
+      } catch (e) {
+        fb = { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: `fetcher: ${String(e).slice(0, 80)}`, jar: [] };
+      }
+    }
     if (!fb.ok) {
       return {
         ok: false,
