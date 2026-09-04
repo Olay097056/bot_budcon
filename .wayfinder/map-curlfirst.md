@@ -20,6 +20,7 @@
 
 - คำตอบ _abck A/B (sync หมด vs ตัด) — เฉลยตอน C03 ทดสอบจริง
 - ตรวจ Set-Cookie หลัง validateseat จริง (curl -c write-back ยังไม่ได้ผูกเข้า saveCookies)
+- C03 E2E จองจริง — blocked เชิงเวลา: WAF cooling (IP score ตกจากยิงรัว) + รอ event เปิดขาย — โค้ดพร้อม `f1bd33d`
 
 ## Out of scope
 
