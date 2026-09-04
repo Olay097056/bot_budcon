@@ -34,7 +34,7 @@ function curlReq(
   url: string,
   headers: Record<string, string>,
   data?: string,
-): { code: string; body: string; setCookies: string } {
+): { code: string; body: string; setCookies: string; jarContent: string } {
   const tmp = join(tmpdir(), `cb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.html`);
   const hdr = join(tmpdir(), `cb-h-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`);
   const jar = join(tmpdir(), `cb-j-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`);
@@ -58,13 +58,15 @@ function curlReq(
   }
   let body = '';
   let setCookies = '';
+  let jarContent = '';
   try { body = readFileSync(tmp, 'utf-8'); } catch {}
   try {
     const h = readFileSync(hdr, 'utf-8');
     setCookies = [...h.matchAll(/^[Ss]et-[Cc]ookie:\s*(.+)$/gm)].map(m => m[1]).join('\n');
   } catch {}
+  try { jarContent = readFileSync(jar, 'utf-8'); } catch {}
   try { execSync(`rm -f "${tmp}" "${hdr}" "${jar}" "${dataFile}"`); } catch {}
-  return { code, body, setCookies };
+  return { code, body, setCookies, jarContent };
 }
 
 function extractK(body: string): string {
@@ -100,6 +102,17 @@ function parseSeats(body: string): CurlSeat[] {
   return out;
 }
 
+/** parse Netscape cookie jar file (จาก curl -c) เป็น name/value pairs */
+function parseNetscapeJar(content: string): { name: string; value: string }[] {
+  const out: { name: string; value: string }[] = [];
+  for (const line of content.split('\n')) {
+    if (!line || line.startsWith('#')) continue;
+    const parts = line.split('\t');
+    if (parts.length >= 7) out.push({ name: parts[5] as string, value: parts[6] as string });
+  }
+  return out;
+}
+
 /**
  * curl-first booking ถึงขั้น validateseat (lock ที่นั่งใน session)
  * คืน jar ล่าสุดสำหรับ hand-off ไป Firefox payment
@@ -118,10 +131,16 @@ export function curlBook(opts: {
   const q = new URL(opts.zonesUrl).searchParams.get('query') ?? '';
   const qty = opts.quantity ?? 1;
 
-  // STEP 1: zones.php
-  const z = curlReq(opts.zonesUrl, { 'Cookie': ck, 'User-Agent': UA_CURL });
+  // STEP 1: zones.php — ลอง jar ก่อน; ถ้า 403 แปลว่า cookie เก่า score ตก
+  // (พิสูจน์ 2026-09-04: no-cookie 200 แต่ jar เก่า 403) → retry แบบไม่ส่ง cookie
+  let z = curlReq(opts.zonesUrl, { 'Cookie': ck, 'User-Agent': UA_CURL });
+  let freshSession = false;
   if (z.code !== '200' || z.body.includes('Access Denied')) {
-    return { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: `zones http ${z.code}${z.body.includes('Access Denied') ? ' Access Denied' : ''}`, jar: cookies };
+    z = curlReq(opts.zonesUrl, { 'User-Agent': UA_CURL });
+    freshSession = true;
+    if (z.code !== '200' || z.body.includes('Access Denied')) {
+      return { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: `zones http ${z.code}${z.body.includes('Access Denied') ? ' Access Denied (with and without jar)' : ''}`, jar: cookies };
+    }
   }
   const k = extractK(z.body);
   const rounds = extractRounds(z.body);
@@ -129,11 +148,20 @@ export function curlBook(opts: {
     return { ok: false, step: 'zones', k, round: '', zone: opts.code, seats: [], error: 'no k/round — sale not open', jar: cookies };
   }
   const round = rounds[0] as string;
+  // ถ้า fresh session (ยิง no-cookie) — cookie ใหม่ที่ server Set-Cookie มาอยู่ใน jar
+  // ของ curl; สกัดเป็น header ต่อใช้กับ fixed/validateseat
+  let stepCookie = ck;
+  if (freshSession && z.jarContent) {
+    const fresh = parseNetscapeJar(z.jarContent);
+    if (fresh.length) {
+      stepCookie = fresh.map(c => `${c.name}=${c.value}`).join('; ');
+    }
+  }
 
   // STEP 2: fixed.php (Referer = zones จำเป็น กัน errcode=9)
   const fixedUrl = `https://booking.thaiticketmajor.com/booking/3m/fixed.php?k=${encodeURIComponent(k)}&zone=${encodeURIComponent(opts.code)}&round=${encodeURIComponent(round as string)}`;
   const f = curlReq(fixedUrl, {
-    'Cookie': ck, 'User-Agent': UA_CURL,
+    'Cookie': stepCookie, 'User-Agent': UA_CURL,
     'Referer': opts.zonesUrl,
   });
   if (f.code !== '200' || !f.body.includes('id="tableseats"') || f.body.includes('Access Denied') || f.body.includes('errcode=9')) {
@@ -164,7 +192,7 @@ export function curlBook(opts: {
 
   const vUrl = `https://booking.thaiticketmajor.com/booking/3m/validateseat.php?k=${encodeURIComponent(k)}&zw=${encodeURIComponent(opts.code)}`;
   const v = curlReq(vUrl, {
-    'Cookie': ck, 'User-Agent': UA_CURL,
+    'Cookie': stepCookie, 'User-Agent': UA_CURL,
     'Referer': fixedUrl,
     'X-Requested-With': 'XMLHttpRequest',
     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
