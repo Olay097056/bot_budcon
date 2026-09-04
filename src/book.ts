@@ -22,6 +22,7 @@ import type { BrowserContext, Page } from 'playwright';
 import type { StoredCookie } from './cookies.js';
 import { loadCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
+import { curlBook } from './curl-book.js';
 
 export interface BookOptions {
   context: BrowserContext;
@@ -111,7 +112,45 @@ export async function book(opts: BookOptions): Promise<BookResult> {
   // 1. Open the zones page and click the zone anchor.
   await page.goto(opts.zonesUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
   const clickResult = await selectZone(page, opts.code);
-  if (!clickResult.ok) return clickResult;
+  if (!clickResult.ok) {
+    // C01 curl-first fallback: Firefox fingerprint โดน Akamai 403 (Access Denied /
+    // signin bounce) แต่ curl/8.0.1 + jar ผ่าน (A2-1 proof) — ลอง curl ถึงขั้น
+    // validateseat แล้ว hand-off Firefox ไปหน้า payment ด้วย session เดียวกัน
+    const fb = curlBook({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty });
+    if (!fb.ok) {
+      return {
+        ok: false,
+        step: 'selectZone',
+        error: `${clickResult.error} | curl-first: ${fb.error}`,
+      };
+    }
+    // sync session cookies ลง context (PHPSESSID ตัวชี้ขาดตะกร้า) — กฎ sameSite จาก C02
+    try {
+      const pwCookies = (fb.jar ?? [])
+        .filter((c) => /thaiticketmajor\.com$/.test(c.domain.replace(/^\./, '')))
+        .filter((c) => !/^(?:_(?:ga|gcl|clck|clsk|fbp|twpid)|__(?:gads|gpi|eoi|lt__cid|lt__sid))/.test(c.name))
+        .map((c) => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
+          path: c.path ?? '/',
+          expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : -1,
+          httpOnly: Boolean(c.httpOnly),
+          secure: Boolean(c.secure),
+          sameSite: (c.secure ? 'None' : 'Lax') as 'None' | 'Lax',
+        }));
+      if (pwCookies.length) await opts.context.addCookies(pwCookies);
+    } catch {
+      // best effort — เดินหน้า payment ด้วย session ที่ browser มีอยู่
+    }
+    // hand-off: เปิดหน้า payment ด้วย session ที่เพิ่งล็อคที่นั่ง
+    await page.goto('https://booking.thaiticketmajor.com/booking/3m/paymentall.php', {
+      waitUntil: 'domcontentloaded',
+      timeout: 15_000,
+    });
+    await payment(page);
+    throw new HumanStepRequired('payment');
+  }
 
   // 2. Quantity selector (number input). Default 1 if field absent.
   const qtyResult = await selectQuantity(page, qty);
