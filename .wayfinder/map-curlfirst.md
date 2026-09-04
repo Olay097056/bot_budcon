@@ -11,6 +11,8 @@
 
 ## Decisions so far
 
+- [C02 cookie jar → Firefox hand-off](tickets-curlfirst/C02-cookie-jar-handoff.md): mapping พร้อม implement (sameSite กฎ secure?None:Lax) + แก้ blocker Set-Cookie ด้วย curl -c write-back — เสี่ยงหลักคือ _abck fingerprint mismatch ต้อง A/B ทดสอบ
+
 ## Not yet specified
 
 - validateseat ผ่าน curl แล้ว session ผูกกับ jar — Firefox ต้องใช้ jar เดียวกัน (แปลง cookie curl→Firefox profile) ถึงเห็นตะกร้า
