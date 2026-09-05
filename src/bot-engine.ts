@@ -66,6 +66,20 @@ function headersToObject(h: Headers): Record<string, string> {
 }
 
 export class BotEngine {
+  /**
+   * Headless override for background fetches (ttm-fetch browser fallback).
+   * The book flow forces headed=false via env (human sees payment), but a
+   * background probe must never pop a visible window — set this true before
+   * calling getContext() from ttm-fetch paths.
+   */
+  static headlessOverride: boolean | null = null;
+  /**
+   * Profile override for background fetches. ttm-fetch sets a scratch
+   * profile so its browser never fights the book-flow engine for the
+   * bot profile lock (two launchPersistentContext on one profile = the
+   * second always fails and retries spawn/die repeatedly).
+   */
+  static profileOverride: string | null = null;
   private _wreqPromise: Promise<WreqModule> | null = null;
   private _wreq: WreqModule | null = null;
   private _context: BrowserContext | null = null;
@@ -209,9 +223,9 @@ export class BotEngine {
     // profile is wedged (lock held by a killed process). Retry once after
     // killing stray Firefox + clearing locks before giving up.
     const launchOnce = () => firefox.launchPersistentContext(
-      config.paths.firefoxProfile,
+      BotEngine.profileOverride ?? config.paths.firefoxProfile,
       {
-        headless: false,
+        headless: BotEngine.headlessOverride ?? false,
         ...(config.proxy ? { proxy: { server: config.proxy } } : {}),
         args: [
           '--no-sandbox',

@@ -134,10 +134,21 @@ let _browserCtx: import('playwright').BrowserContext | null = null;
 
 async function getBrowserCtx(): Promise<import('playwright').BrowserContext> {
   if (_browserCtx) return _browserCtx;
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
   const { BotEngine } = await import('./bot-engine.js');
   const eng: any = new (BotEngine as any)();
+  // Background fetch fallback: headless + scratch profile — never pops a
+  // visible window, never fights the book-flow engine for the bot profile.
+  BotEngine.headlessOverride = true;
+  BotEngine.profileOverride = join(tmpdir(), 'bot_budcon-fetch-profile');
   _browserEng = eng;
-  _browserCtx = await eng.getContext();
+  try {
+    _browserCtx = await eng.getContext();
+  } finally {
+    BotEngine.headlessOverride = null;
+    BotEngine.profileOverride = null;
+  }
   return _browserCtx as import('playwright').BrowserContext;
 }
 
