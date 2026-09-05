@@ -2,12 +2,20 @@
 setlocal
 cd /d "%~dp0"
 
-REM === 0. kill node ค้างจาก run ก่อนหน้า ===
+REM === anti-double-run lock (กันคลิกรัวจน browser เด้งซ้ำ) ===
+if exist "%TEMP%\bot_budcon.lock" (
+  echo * พบว่ากำลังรันอยู่แล้ว — เปิดหน้าเว็บให้เฉยๆ
+  start "" http://localhost:7890
+  exit /b 0
+)
+echo run>%TEMP%\bot_budcon.lock
+
+REM === 0. kill node/firefox ค้าง + ล้าง lock ===
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\_run-cleanup.ps1"
 echo * cleanup: OK
 
 REM === 1. node + deps + playwright ===
-where node >nul 2>&1 || (echo ! Node: MISSING & exit /b 1)
+where node >nul 2>&1 || (echo ! Node: MISSING & del "%TEMP%\bot_budcon.lock" & exit /b 1)
 echo * Node: OK
 call npm install --silent >nul 2>&1
 echo * deps: OK
@@ -17,14 +25,13 @@ echo * playwright: OK
 REM === 2. port 7890 ===
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\_run-port-check.ps1"
 
-REM === 3. start server ===
-REM C03 FIX: invisible engine (patched FF151) is hard-denied by Akamai on event.*; playwright Firefox passes
+REM === 3. start server (login ผ่าน Firefox จริงของ user — invisible engine โดน Akamai deny) ===
 set BOT_BUDCON_LOGIN_DRIVER=playwright
 set BOT_BUDCON_HEADLESS=0
 start "bot_budcon-server" /min cmd /c "npx tsx src/server.ts"
 echo * server starting...
 
-REM === 4. wait server ready (max 30s) ===
+REM === 4. wait server ready (max 45s) ===
 set /a i=0
 :wait_loop
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\_run-wait-server.ps1" >nul 2>&1
@@ -33,18 +40,19 @@ if %ERRORLEVEL% EQU 0 (
   goto ready
 )
 set /a i+=1
-if %i% GTR 30 (
-  echo ! server: TIMEOUT after 30s
+if %i% GTR 45 (
+  echo ! server: TIMEOUT 45s — ดู server-log.txt
+  del "%TEMP%\bot_budcon.lock"
   exit /b 1
 )
 timeout /t 1 /nobreak >nul
 goto wait_loop
 
 :ready
-REM === 5. open browser ===
+REM === 5. เปิด browser ครั้งเดียว ===
 start "" http://localhost:7890
+del "%TEMP%\bot_budcon.lock"
 echo * open: http://localhost:7890
 echo.
-echo === run_here.bat DONE ===
-echo === Login: ทำ captcha ใน Firefox ที่เด้ง ===
-echo === Stop: ปิด window "bot_budcon-server" หรือ taskkill /IM node.exe ===
+echo === เสร็จ — server ทำงานอยู่เบื้องหลัง (window: bot_budcon-server) ===
+echo === หยุด: ปิด window bot_budcon-server หรือ taskkill /IM node.exe ===
