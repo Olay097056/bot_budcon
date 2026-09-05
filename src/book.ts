@@ -101,6 +101,11 @@ export async function book(opts: BookOptions): Promise<BookResult> {
   let page: import('playwright').Page;
   if (needsFresh) {
     page = await opts.context.newPage();
+    // Previous payment/zones tabs are stale sessions — close them so
+    // repeated bookings don't accumulate tabs (user-visible: 'many tabs').
+    for (const extra of existing) {
+      try { if (!extra.isClosed() && extra !== page) await extra.close(); } catch {}
+    }
   } else {
     page = first as import('playwright').Page;
     // Close any extra pages left from earlier retries so we keep
