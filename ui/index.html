@@ -323,6 +323,24 @@ button{font:inherit}
 @media (prefers-reduced-motion: reduce){
   .orb i::after, .login-state.on .dot2, .watch-status.on .dot2, .pay-bar{ animation:none !important; transition:none !important}
 }
+
+/* ===== session bridge (C03) ===== */
+.bridge-steps{margin:8px 0 10px;padding-left:18px;display:grid;gap:6px;color:#8A8FA3;font-size:13px;line-height:1.5}
+.bridge-steps b{color:#F0EDE8}
+.bridge-steps .mono{color:#00E5FF;font-size:12px}
+.bridge-row{display:flex;gap:8px;margin-top:4px}
+.sess-input{flex:1;background:#070A14;border:1px solid #232946;border-radius:8px;color:#F0EDE8;
+  font-family:"JetBrains Mono",monospace;font-size:12.5px;padding:10px 12px;outline:none;transition:border-color .15s}
+.sess-input:focus{border-color:#00E5FF;box-shadow:0 0 0 3px rgba(0,229,255,.12)}
+.sess-input::placeholder{color:#5A6080}
+.sess-btn{white-space:nowrap;border:none;border-radius:8px;padding:10px 18px;font-family:"IBM Plex Sans Thai","Sora",sans-serif;
+  font-weight:600;font-size:13.5px;cursor:pointer;background:#00E5FF;color:#070A14;transition:filter .15s,transform .1s}
+.sess-btn:hover{filter:brightness(1.12)}
+.sess-btn:active{transform:scale(.97)}
+.sess-btn:disabled{opacity:.5;cursor:wait}
+#sessMsg.ok{color:#00E5FF}
+#sessMsg.err{color:#FF3B30}
+@media (prefers-reduced-motion: reduce){.sess-btn,.sess-input{transition:none}}
 </style>
 </head>
 <body>
@@ -436,6 +454,18 @@ button{font:inherit}
   <button class="drawer-toggle" id="drawerToggle">▾ เครื่องมือขั้นสูง / สถานะระบบ</button>
   <div class="drawer" id="drawer">
     <div class="panel">
+      <h3>สะพานเซสชัน — ใช้ Firefox ตัวเองล็อกอิน</h3>
+      <p class="note" style="margin-top:-4px">Akamai บล็อกบอทล็อกอินเอง — ต้องยืมเซสชันจาก Firefox ของคุณ (ทำครั้งเดียว ใช้ได้จนกว่าเซสชันจะหมดอายุ)</p>
+      <ol class="bridge-steps">
+        <li><b>เปิด</b> <a href="https://www.thaiticketmajor.com/" target="_blank" rel="noopener">thaiticketmajor.com</a> ใน Firefox ปกติ แล้วล็อกอิน</li>
+        <li>เข้าลิงก์จอง (โซนที่เลือก) ให้เว็บสร้างเซสชันจอง</li>
+        <li>กด <b>F12</b> → แท็บ <b>ที่เก็บข้อมูล</b> → Cookies → <span class="mono">booking.thaiticketmajor.com</span> → คัดลอกค่า <span class="mono">PHPSESSID</span></li>
+      </ol>
+      <div class="bridge-row">
+        <input id="sessInput" class="sess-input mono" placeholder="วางค่า PHPSESSID ตรงนี้" autocomplete="off" spellcheck="false">
+        <button id="sessPasteBtn" class="sess-btn">เชื่อมเซสชัน</button>
+      </div>
+      <p class="note" id="sessMsg" style="display:none"></p>
       <h3>สถานะระบบ</h3>
       <div class="kv-row">
         <span>เบราว์เซอร์: <b id="chromeAlive" class="mono">—</b></span>
@@ -1060,6 +1090,48 @@ setInterval(tick, 2000); setInterval(authTick, 2000); setInterval(watchTick, 200
 // auto-discover on load (real-time, no hardcode) — every 5m with ±20% jitter ( hygiene ticket A2-2 )
 doDiscover();
 (function scheduleNext(){ const j=0.8+0.4*Math.random(); setTimeout(()=>{ if(!discovering) doDiscover(); scheduleNext(); }, Math.round(300_000*j)); })();
+
+// ===== Session bridge (C03) =====
+(function(){
+  const input = document.getElementById('sessInput');
+  const btn = document.getElementById('sessPasteBtn');
+  const msg = document.getElementById('sessMsg');
+  if (!input || !btn || !msg) return;
+  async function pasteSession(){
+    const sid = (input.value || '').trim();
+    msg.style.display = 'block';
+    if (!sid || sid.length < 8) {
+      msg.className = 'note err';
+      msg.textContent = 'ค่า PHPSESSID ดูไม่ถูกต้อง — ลองคัดลอกใหม่ (ควรเป็นตัวอักษรยาวๆ ~32 ตัว)';
+      return;
+    }
+    btn.disabled = true;
+    msg.className = 'note';
+    msg.textContent = 'กำลังเชื่อมเซสชัน…';
+    try {
+      const r = await fetch('/api/session/paste', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ phpsessid: sid }),
+      });
+      const d = await r.json();
+      if (r.ok && d.ok) {
+        msg.className = 'note ok';
+        msg.textContent = '✓ เชื่อมเซสชันแล้ว (' + d.total + ' cookies) — พร้อมจอง';
+        input.value = '';
+      } else {
+        msg.className = 'note err';
+        msg.textContent = 'เชื่อมไม่สำเร็จ: ' + (d.error || ('HTTP ' + r.status));
+      }
+    } catch (e) {
+      msg.className = 'note err';
+      msg.textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ' + e;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  btn.addEventListener('click', pasteSession);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') pasteSession(); });
+})();
 </script>
 </body>
 </html>
