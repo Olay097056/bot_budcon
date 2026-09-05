@@ -27,3 +27,9 @@ book.log
 .idea/
 .vscode/
 *.swp
+
+# runtime logs
+server-log*.txt
+autologin-log.txt
+_*.ts
+_*.mjs
