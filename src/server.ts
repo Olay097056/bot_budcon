@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { config } from './config.js';
 import { BotEngine } from './bot-engine.js';
+import { tmpdir } from 'node:os';
 import { loadCookies, saveCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
 import { maybeRelogin, type AutoReloginState } from './auto-relogin.js';
@@ -410,6 +411,42 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   // Preview a single zones.php — lightweight zones/rounds/k check for any query/url.
+  // GET /api/session/check — probe zones.php 1 request ด้วย jar ปัจจุบัน
+  // → {alive: true} หรือ {alive: false, reason: 'signin-bounce'|'http-403'|'no-session'}
+  // (S01: ไม่ยิงเปล่า — book/watch กดแล้วรู้ทันทีว่า session ตาย)
+  if (req.method === 'GET' && url.pathname === '/api/session/check') {
+    try {
+      const { buildCookieHeader, loadCookies } = await import('./cookies.js');
+      const ck = buildCookieHeader(loadCookies(), 'booking.thaiticketmajor.com');
+      if (!ck) {
+        json(res, 200, { alive: false, reason: 'no-session' });
+        return;
+      }
+      const { execSync } = await import('node:child_process');
+      const tmp = join(tmpdir(), `sesschk-${Date.now()}.html`);
+      const out = execSync(
+        `curl -s --compressed --max-time 15 -A "curl/8.0.1" -H "Cookie: ${ck.replace(/"/g, '')}" -o "${tmp}" -w "%{http_code}" "https://booking.thaiticketmajor.com/booking/3m/zones.php?query=741"`,
+        { encoding: 'utf-8', timeout: 20_000 },
+      ) as string;
+      let body = '';
+      try { body = readFileSync(tmp, 'utf-8'); } catch {}
+      try { execSync(`rm -f "${tmp}"`); } catch {}
+      const bounced = /url=\s*\/?user\/signin\.php/i.test(body);
+      if (bounced) {
+        json(res, 200, { alive: false, reason: 'signin-bounce' });
+        return;
+      }
+      if (out.trim() === '403' || body.includes('Access Denied')) {
+        json(res, 200, { alive: false, reason: 'http-403' });
+        return;
+      }
+      json(res, 200, { alive: true, status: out.trim() });
+    } catch (e) {
+      json(res, 200, { alive: false, reason: 'error: ' + String(e).slice(0, 80) });
+    }
+    return;
+  }
+
   // POST /api/session/paste {phpsessid} — user copies PHPSESSID from real
   // Firefox DevTools (Application > Cookies > booking.thaiticketmajor.com)
   // and pastes it here; we save it into cookies.json so the bot's booking

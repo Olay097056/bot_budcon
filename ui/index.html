@@ -1139,6 +1139,58 @@ doDiscover();
   btn.addEventListener('click', pasteSession);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') pasteSession(); });
 })();
+
+// ===== Session status (S02) =====
+(function(){
+  const pill = document.getElementById('sessPill');
+  const txt = document.getElementById('sessPillText');
+  const fix = document.getElementById('sessFix');
+  if (!pill) return;
+  window.checkSession = async function(){
+    pill.className = 'sess-pill unknown';
+    txt.textContent = 'เซสชัน: กำลังตรวจ…';
+    fix.style.display = 'none';
+    try {
+      const r = await fetch('/api/session/check');
+      const d = await r.json();
+      if (d.alive) {
+        pill.className = 'sess-pill alive';
+        txt.textContent = 'เซสชัน: พร้อมจอง';
+        return true;
+      }
+      pill.className = 'sess-pill dead';
+      const why = d.reason === 'signin-bounce' ? 'เซสชันหมดอายุ'
+        : d.reason === 'no-session' ? 'ยังไม่มีเซสชัน'
+        : d.reason === 'http-403' ? 'โดน WAF บล็อก' : d.reason;
+      txt.innerHTML = 'เซสชัน: ' + why + ' ';
+      fix.style.display = 'inline';
+      return false;
+    } catch (e) {
+      pill.className = 'sess-pill unknown';
+      txt.textContent = 'เซสชัน: ตรวจไม่ได้';
+      return false;
+    }
+  };
+  // ตรวจตอนเปิดหน้า + ทุก 5 นาที
+  checkSession();
+  setInterval(checkSession, 5 * 60 * 1000);
+  // ก่อนกดจอง: ถ้า session ตาย บล็อกพร้อมเหตุผล
+  const bookBtn = document.getElementById('bookBtn');
+  if (bookBtn) {
+    const orig = bookBtn.addEventListener.bind(bookBtn);
+    orig('click', async () => {
+      const alive = await window.checkSession();
+      if (!alive) {
+        document.getElementById('bookNote').textContent = 'เซสชันหมดอายุ — วาง PHPSESSID ใหม่ใน "สะพานเซสชัน" ด้านล่างก่อน';
+        // scroll ไปที่ pill
+        pill.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, { capture: true, once: false });
+  }
+  // paste สำเร็จ → ตรวจซ้ำทันที
+  const sessBtn = document.getElementById('sessPasteBtn');
+  if (sessBtn) sessBtn.addEventListener('click', () => setTimeout(checkSession, 2500));
+})();
 </script>
 </body>
 </html>
