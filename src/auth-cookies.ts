@@ -176,8 +176,17 @@ export function gate(
   nowSec = Math.floor(Date.now() / 1000),
 ): { accept: boolean; primary: StoredCookie | null; reason?: 'no_auth' | 'expired' | 'no_phase1'; summary: AuthCookieSummary } {
   const summary = summarize(cookies, nowSec);
+  // C03: curl-first mode acquires Phase-1 cookies live from the server
+  // (zones.php Set-Cookie on the first no-cookie request), so a missing
+  // phase1 is no longer fatal as long as a real login session exists
+  // (AUTH + PHPSESSID pasted from the real Firefox).
   if (summary.phase1.length === 0) {
-    return { accept: false, primary: summary.primary, reason: 'no_phase1', summary };
+    const hasSession = cookies.some((c) => c.name === 'PHPSESSID');
+    if (summary.all.length > 0 && hasSession) {
+      // accept — phase1 will be acquired live
+    } else {
+      return { accept: false, primary: summary.primary, reason: 'no_phase1', summary };
+    }
   }
   if (summary.all.length === 0) {
     return { accept: false, primary: null, reason: 'no_auth', summary };

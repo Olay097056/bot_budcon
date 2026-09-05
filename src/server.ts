@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { config } from './config.js';
 import { BotEngine } from './bot-engine.js';
-import { loadCookies } from './cookies.js';
+import { loadCookies, saveCookies } from './cookies.js';
 import { gate } from './auth-cookies.js';
 import { maybeRelogin, type AutoReloginState } from './auto-relogin.js';
 import { startLogin } from './login.js';
@@ -410,6 +410,35 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   // Preview a single zones.php — lightweight zones/rounds/k check for any query/url.
+  // POST /api/session/paste {phpsessid} — user copies PHPSESSID from real
+  // Firefox DevTools (Application > Cookies > booking.thaiticketmajor.com)
+  // and pastes it here; we save it into cookies.json so the bot's booking
+  // flow uses the logged-in session (the ONLY way past Akamai's automation
+  // deny — the real Firefox is the only trusted login surface).
+  if (req.method === 'POST' && url.pathname === '/api/session/paste') {
+    const body = await readJsonBody(req);
+    const sid = typeof body['phpsessid'] === 'string' ? (body['phpsessid'] as string).trim() : '';
+    if (!sid) {
+      json(res, 400, { error: 'phpsessid required' });
+      return;
+    }
+    const store = loadCookies();
+    const filtered = store.filter((c) => c.name !== 'PHPSESSID');
+    filtered.push({
+      name: 'PHPSESSID',
+      value: sid,
+      domain: '.thaiticketmajor.com',
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      expires: Math.floor(Date.now() / 1000) + 30 * 60,
+    });
+    saveCookies(filtered);
+    log(`session paste: PHPSESSID saved (${sid.length} chars)`);
+    json(res, 200, { ok: true, total: filtered.length });
+    return;
+  }
+
   // POST /api/events/preview {query|url} → {query, zonesUrl, zones, rounds, k, warnings}
   // Also gate-free; useful to probe a custom query before Watch/Book.
   // Falls back to discover-cache when live fetch is WAF-blocked.

@@ -116,6 +116,38 @@ export class BotEngine {
    * launch because the prior TTM-bot session kept hitting
    * `parent.lock` errors when Firefox died mid-launch.
    */
+  /**
+   * Seed cookies.json into the context — THE ONLY place cookies enter.
+   * Always clearCookies first: the persistent profile keeps stale Akamai
+   * state (a deny _abck saved in cookies.sqlite survives on disk and
+   * re-triggers Access Denied on every launch). WAF cookies are also
+   * stripped from the seed because they are bound to the curl fingerprint
+   * (proven A/B 2026-09-04: seed-all = 403, seed-clean = 200).
+   */
+  private async seedCookies(context: BrowserContext): Promise<void> {
+    try {
+      try { await context.clearCookies(); } catch {}
+      const store = loadCookies();
+      const WAF_COOKIE = /^(?:_abck|bm_[a-z]+|ak_bmsc|hwwafsesid|hwwafsestime)$/i;
+      const pwCookies = store
+        .filter((c) => c.name && c.value && c.domain)
+        .filter((c) => !WAF_COOKIE.test(c.name))
+        .map((c) => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
+          path: c.path ?? '/',
+          secure: Boolean(c.secure),
+          httpOnly: Boolean(c.httpOnly),
+          expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
+          sameSite: 'Lax' as const,
+        }));
+      if (pwCookies.length) await context.addCookies(pwCookies);
+    } catch {
+      // best effort
+    }
+  }
+
   async getContext(): Promise<BrowserContext> {
     if (this._context) {
       // T01 LM5 FIX: if context/browser died (user closed Firefox, crash, or prior Target closed),
@@ -144,24 +176,7 @@ export class BotEngine {
         // Re-seed on every access so a fresh invisible login (ticket 14)
         // is picked up without needing to restart the server / kill
         // the persistent profile.
-        try {
-          const store = loadCookies();
-          const pwCookies = store
-            .filter((c) => c.name && c.value && c.domain)
-            .map((c) => ({
-              name: c.name,
-              value: c.value,
-              domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
-              path: c.path ?? '/',
-              secure: Boolean(c.secure),
-              httpOnly: Boolean(c.httpOnly),
-              expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
-              sameSite: 'Lax' as const,
-            }));
-          if (pwCookies.length) await this._context.addCookies(pwCookies);
-        } catch {
-          // best effort
-        }
+        await this.seedCookies(this._context);
         return this._context;
       }
     }
@@ -190,7 +205,10 @@ export class BotEngine {
       }
     }
 
-    this._context = await firefox.launchPersistentContext(
+    // T-launch FIX: Firefox sometimes exits instantly (exitCode=0) when the
+    // profile is wedged (lock held by a killed process). Retry once after
+    // killing stray Firefox + clearing locks before giving up.
+    const launchOnce = () => firefox.launchPersistentContext(
       config.paths.firefoxProfile,
       {
         headless: false,
@@ -202,30 +220,36 @@ export class BotEngine {
         ],
       },
     );
-    // Seed the persistent profile from cookies.json so a hand-driven
-    // invisible login (ticket 14) is reusable from the book flow
-    // without requiring a second manual login in this profile.
-    // Playwright's addCookies expects explicit domain/path; the
-    // cookies.json store already carries those. Ignore failures
-    // (e.g. expired -1) so a single bad cookie doesn't kill launch.
     try {
-      const store = loadCookies();
-      const pwCookies = store
-        .filter((c) => c.name && c.value && c.domain)
-        .map((c) => ({
-          name: c.name,
-          value: c.value,
-          domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
-          path: c.path ?? '/',
-          secure: Boolean(c.secure),
-          httpOnly: Boolean(c.httpOnly),
-          expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : undefined,
-          sameSite: 'Lax' as const,
-        }));
-      if (pwCookies.length) await this._context.addCookies(pwCookies);
-    } catch {
-      // best effort — book will surface a useful error if still not logged in
+      this._context = await launchOnce();
+    } catch (err) {
+      const msg = String(err);
+      if (/Failed to launch|process did exit|Target closed/i.test(msg)) {
+        // eslint-disable-next-line no-console
+        console.log('[bot-engine] launch failed — killing stray firefox, clearing locks, retrying once');
+        try {
+          const { execSync } = await import('node:child_process');
+          try { execSync('taskkill /F /IM firefox.exe /T', { stdio: 'ignore' }); } catch {}
+          await new Promise((r) => setTimeout(r, 1000));
+          // zombie contentproc อาจรอด taskkill — powershell Kill() ตรงๆ อีกรอบ
+          try {
+            execSync("powershell -NoProfile -Command \"Get-Process firefox -ErrorAction SilentlyContinue | ForEach-Object { try { $_.Kill() } catch {} }\"", { stdio: 'ignore', timeout: 15000 });
+          } catch {}
+          await new Promise((r) => setTimeout(r, 2000));
+        } catch {}
+        for (const name of ['parent.lock', 'lock', '.parentlock']) {
+          const p = join(config.paths.firefoxProfile, name);
+          try { if (existsSync(p)) unlinkSync(p); } catch {}
+        }
+        this._context = await launchOnce();
+      } else {
+        throw err;
+      }
     }
+    // Seed the persistent profile from cookies.json via seedCookies —
+    // single choke point: clearCookies (wipe stale Akamai state saved
+    // on disk) + WAF-cookie strip (fingerprint mismatch = Access Denied).
+    await this.seedCookies(this._context);
     return this._context;
   }
 

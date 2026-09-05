@@ -168,7 +168,19 @@ export async function startLoginInvisible(
   // `<repo>/src/python/invisible_browser.py`.
   const here = dirname(fileURLToPath(import.meta.url));
   const script = resolve(here, 'python', 'invisible_browser.py');
-  const child = spawn('python', [script], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // Prefer the runtime interpreter that has invisible_playwright installed
+  // (the bare 'python' on PATH may be a venv without the module — it then
+  // emits fatal immediately and login can never start).
+  const candidates = [
+    'C:/Users/bit-it.helpdesk/AppData/Local/hermes/hermes-agent/.hermes-runtime/python/cpython-3.11-windows-x86_64-none/python.exe',
+    'python',
+  ];
+  let pythonExe = 'python';
+  try {
+    const { existsSync } = await import('node:fs');
+    for (const c of candidates) if (existsSync(c)) { pythonExe = c; break; }
+  } catch {}
+  const child = spawn(pythonExe, [script], { stdio: ['ignore', 'pipe', 'pipe'] });
   return await new Promise<boolean>((resolvePromise) => {
     let resolved = false;
     let buffer = '';

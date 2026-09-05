@@ -145,6 +145,11 @@ export function curlBook(opts: {
   const k = extractK(z.body);
   const rounds = extractRounds(z.body);
   if (!k || rounds.length === 0) {
+    // C03 fix: zones.php ตอบ 200 แต่เนื้อเป็น meta-refresh ไป signin = session ไม่ผูก
+    // (ห้ามรายงาน "sale not open" เพราะปิดบังปัญหา session)
+    if (/url=\s*\/?user\/signin\.php/i.test(z.body)) {
+      return { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: 'signin bounce — session not bound (login session missing)', jar: cookies };
+    }
     return { ok: false, step: 'zones', k, round: '', zone: opts.code, seats: [], error: 'no k/round — sale not open', jar: cookies };
   }
   const round = rounds[0] as string;

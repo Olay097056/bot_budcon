@@ -173,6 +173,10 @@ export async function book(opts: BookOptions): Promise<BookResult> {
   const qtyResult = await selectQuantity(page, qty);
   if (!qtyResult.ok) return qtyResult;
 
+  // 2.5 Pick seats on the fixed.php seating chart (ticket 15 flow).
+  const pickResult = await pickSeats(page, qty);
+  if (!pickResult.ok) return pickResult;
+
   // 3. Confirm seats → next page (or captcha challenge).
   const confirmResult = await confirmSeats(page);
   if (!confirmResult.ok) return confirmResult;
@@ -200,6 +204,18 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
   // So we must ensure a round is selected, then navigate directly to that URL.
   // Direct navigation is more reliable than clicking the <area> (which is 0x0 and
   // sits behind the 590x530 <img usemap> that intercepts pointer events).
+  // WAF interstitial (407 challenge) loads with empty <title> and no anchors.
+  // Detect and give the Akamai JS a moment to clear, then reload once.
+  try {
+    const earlyTitle = await page.evaluate(() => (globalThis as unknown as { document: { title: string } }).document.title).catch(() => 'x');
+    const earlyBodyLen = await page.evaluate(() => ((globalThis as unknown as { document: { body?: { innerText?: string } } }).document.body?.innerText ?? '').length).catch(() => 0);
+    if (!earlyTitle && earlyBodyLen < 50) {
+      await page.waitForLoadState('load', { timeout: 8_000 }).catch(() => {});
+      await page.waitForTimeout(4_000);
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {});
+    }
+  } catch {}
+
   const selectors = [
     `a[href*="#fixed.php#${code}"]`,
     `a[href*="#festival.php#${code}"]`,
@@ -223,7 +239,16 @@ export async function selectZone(page: Page, code: string): Promise<BookResult> 
     }
   }
   if (!link || !href) {
-    return { ok: false, step: 'selectZone', error: `no anchor for ${code}` };
+    // C03 diagnose: report the page we actually landed on so a signin
+    // bounce / WAF interstitial isn't mistaken for "sale not open".
+    let landed = '';
+    try {
+      landed = page.url();
+      const title = await page.evaluate(() => (globalThis as unknown as { document: { title: string } }).document.title).catch(() => '');
+      const denied = await page.evaluate(() => ((globalThis as unknown as { document: { body?: { innerText?: string } } }).document.body?.innerText ?? '').includes('Access Denied')).catch(() => false);
+      landed = `${landed} title="${title}" denied=${denied}`;
+    } catch {}
+    return { ok: false, step: 'selectZone', error: `no anchor for ${code} [${landed}]` };
   }
   // Detect mock/test environment: no #rdId and no k -> fallback to old click path so existing unit tests keep passing.
   const hasRdId = await page.$('#rdId');

@@ -18,7 +18,8 @@ REM === 2. port 7890 ===
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\_run-port-check.ps1"
 
 REM === 3. start server ===
-set BOT_BUDCON_LOGIN_DRIVER=invisible
+REM C03 FIX: invisible engine (patched FF151) is hard-denied by Akamai on event.*; playwright Firefox passes
+set BOT_BUDCON_LOGIN_DRIVER=playwright
 set BOT_BUDCON_HEADLESS=0
 start "bot_budcon-server" /min cmd /c "npx tsx src/server.ts"
 echo * server starting...
