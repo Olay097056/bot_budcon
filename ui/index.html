@@ -301,7 +301,7 @@ button{font:inherit}
 .hall-poly.active{ fill:rgba(0,229,255,.32); stroke:var(--cyan); stroke-width:1.8; filter:drop-shadow(0 0 6px rgba(0,229,255,.5)) }
 .hall-fallback{ padding:18px; text-align:center; color:var(--muted); font-size:13px }
 .hall-meta{ padding:8px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line) }
-.seat{ aspect-ratio:1; border-radius:7px; border:1px solid var(--line); display:grid; place-items:center; font-family:"JetBrains Mono",monospace; font-size:10.5px; cursor:pointer; transition:all .12s; user-select:none }
+.seat{ aspect-ratio:1; border-radius:7px; border:1px solid var(--line); display:grid; place-items:center; font-family:"JetBrains Mono",monospace; font-size:11.5px; cursor:pointer; transition:all .12s; user-select:none }
 .seat.free{ background:rgba(0,229,255,.08); border-color:rgba(0,229,255,.30); color:var(--paper) }
 .seat.free:hover{ border-color:var(--cyan); background:rgba(0,229,255,.16) }
 .seat.free.sel{ background:var(--cyan); color:var(--void); border-color:var(--cyan); font-weight:700 }
@@ -332,7 +332,7 @@ button{font:inherit}
 .sess-input{flex:1;background:#070A14;border:1px solid #232946;border-radius:8px;color:#F0EDE8;
   font-family:"JetBrains Mono",monospace;font-size:12.5px;padding:10px 12px;outline:none;transition:border-color .15s}
 .sess-input:focus{border-color:#00E5FF;box-shadow:0 0 0 3px rgba(0,229,255,.12)}
-.sess-input::placeholder{color:#5A6080}
+.sess-input::placeholder{color:#7B8199}
 .sess-btn{white-space:nowrap;border:none;border-radius:8px;padding:10px 18px;font-family:"IBM Plex Sans Thai","Sora",sans-serif;
   font-weight:600;font-size:13.5px;cursor:pointer;background:#00E5FF;color:#070A14;transition:filter .15s,transform .1s}
 .sess-btn:hover{filter:brightness(1.12)}
@@ -341,10 +341,12 @@ button{font:inherit}
 #sessMsg.ok{color:#00E5FF}
 #sessMsg.err{color:#FF3B30}
 @media (prefers-reduced-motion: reduce){.sess-btn,.sess-input{transition:none}}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 </style>
 </head>
 <body>
-<div class="shell">
+<main class="shell">
   <header class="topbar">
     <div class="brand">
       <div class="orb" id="orb"><i></i></div>
@@ -368,6 +370,7 @@ button{font:inherit}
     </div>
     <div class="panel" id="step1Panel">
       <div class="search-row">
+        <label class="sr-only" for="customQuery">ค้นหางานแสดง หรือวางรหัส/ลิงก์</label>
         <input id="customQuery" class="input" placeholder="ค้นหา หรือวางรหัส/ลิงก์ เช่น 504"/>
         <button id="discoverBtn" class="btn">↻ รีเฟรช</button>
       </div>
@@ -378,7 +381,7 @@ button{font:inherit}
       <div id="eventList" class="event-list"></div>
       <div id="eventEmpty" class="empty" style="display:none"></div>
       <div id="eventPreview" class="preview" style="display:none"></div>
-      <button id="previewBtn" style="display:none"></button>
+      <button id="previewBtn" style="display:none" aria-hidden="true" tabindex="-1"></button>
     </div>
   </section>
 
@@ -450,8 +453,10 @@ button{font:inherit}
     </div>
   </section>
 
+</main>
+
   <!-- ADVANCED drawer -->
-  <button class="drawer-toggle" id="drawerToggle">▾ เครื่องมือขั้นสูง / สถานะระบบ</button>
+  <button class="drawer-toggle" id="drawerToggle" aria-expanded="false" aria-controls="drawer">▾ เครื่องมือขั้นสูง / สถานะระบบ</button>
   <div class="drawer" id="drawer">
     <div class="panel">
       <h3>สะพานเซสชัน — ใช้ Firefox ตัวเองล็อกอิน</h3>
@@ -462,10 +467,11 @@ button{font:inherit}
         <li>กด <b>F12</b> → แท็บ <b>ที่เก็บข้อมูล</b> → Cookies → <span class="mono">booking.thaiticketmajor.com</span> → คัดลอกค่า <span class="mono">PHPSESSID</span></li>
       </ol>
       <div class="bridge-row">
+        <label class="sr-only" for="sessInput">ค่า PHPSESSID</label>
         <input id="sessInput" class="sess-input mono" placeholder="วางค่า PHPSESSID ตรงนี้" autocomplete="off" spellcheck="false">
         <button id="sessPasteBtn" class="sess-btn">เชื่อมเซสชัน</button>
       </div>
-      <p class="note" id="sessMsg" style="display:none"></p>
+      <p class="note" id="sessMsg" role="status" aria-live="polite" style="display:none"></p>
       <h3>สถานะระบบ</h3>
       <div class="kv-row">
         <span>เบราว์เซอร์: <b id="chromeAlive" class="mono">—</b></span>
@@ -1079,6 +1085,7 @@ $('bookBtn').addEventListener('click', async()=>{
 $('drawerToggle').addEventListener('click', ()=>{
   const d=$('drawer');
   d.classList.toggle('open');
+  drawerToggle.setAttribute('aria-expanded', String(d.classList.contains('open')));
   $('drawerToggle').textContent = d.classList.contains('open')? '▴ ซ่อนเครื่องมือขั้นสูง':'▾ เครื่องมือขั้นสูง / สถานะระบบ';
 });
 
