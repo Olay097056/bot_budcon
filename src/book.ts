@@ -155,6 +155,23 @@ export async function book(opts: BookOptions): Promise<BookResult> {
         waitUntil: 'domcontentloaded',
         timeout: 15_000,
       });
+      // VERIFY (หลังบทเรียน false positive): ยืนยันว่าหน้า payment โหลดจริง
+      // ไม่ใช่ Access Denied / signin bounce — ถ้า deny ให้รายงานตรงๆ
+      await page.waitForTimeout(2_500);
+      const payCheck = await page.evaluate(() => ({
+        title: (globalThis as unknown as { document: { title: string } }).document.title || '',
+        text: ((globalThis as unknown as { document: { body?: { innerText?: string } } }).document.body?.innerText ?? '').slice(0, 400),
+        url: (globalThis as unknown as { location: { href: string } }).location.href,
+      })).catch(() => ({ title: '?', text: '', url: '?' }));
+      const denied = /Access Denied/i.test(payCheck.title + ' ' + payCheck.text);
+      const bounced = /signin\.php/i.test(payCheck.url) || (/url=\s*\/?user\/signin\.php/i.test(payCheck.text) && payCheck.text.length < 400);
+      if (denied || bounced) {
+        return {
+          ok: false,
+          step: 'payment',
+          error: `หน้าชำระเงินโดนบล็อก (${denied ? 'Access Denied' : 'signin bounce'}) — ที่นั่งยังล็อคอยู่ในเซสชัน curl ลองเปิดลิงก์จองใน Firefox ปกติของคุณเพื่อจ่ายต่อ`,
+        };
+      }
       await payment(page);
       throw new HumanStepRequired('payment');
     }
