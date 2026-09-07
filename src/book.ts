@@ -115,23 +115,14 @@ export async function book(opts: BookOptions): Promise<BookResult> {
     }
   }
 
-  // 1. Open the zones page and click the zone anchor.
-  await page.goto(opts.zonesUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-  const clickResult = await selectZone(page, opts.code);
-  if (!clickResult.ok) {
-    // C01 curl-first fallback: Firefox fingerprint โดน Akamai 403 (Access Denied /
-    // signin bounce) แต่ curl/8.0.1 + jar ผ่าน (A2-1 proof) — ลอง curl ถึงขั้น
-    // validateseat แล้ว hand-off Firefox ไปหน้า payment ด้วย session เดียวกัน
-    let fb: ReturnType<typeof curlBook> | Awaited<ReturnType<typeof curlBookWithFetcher>>;
-    const isLiveTtm = /booking\.thaiticketmajor\.com\/booking\/3m\/zones\.php/.test(opts.zonesUrl);
-    if (isLiveTtm) {
-      fb = curlBook({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty });
-    } else {
-      // unit test / non-TTM URL — ไม่ยิง network จริง
-      fb = { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: 'skip fallback (non-TTM url)', jar: [] };
-    }
-    if (!fb.ok && isLiveTtm) {
-      // curl ตรงไม่ผ่าน (เช่น signin bounce) — ลองผ่าน hardenedFetcher (server session สด)
+  // ===== C03 FINAL ORDER: curl-first FIRST (no visible browser until payment) =====
+  // ลำดับใหม่ตามหลักฐาน A2-1 + 704 live: curl/8.0.1+jar ยิง zones→fixed→validateseat
+  // ผ่าน 100% (4/4 โซน 2026-09-05) ขณะที่ Firefox automation โดน Akamai deny
+  // — เปิด Firefox เฉพาะตอนจบ (payment) เท่านั้น ผู้ใช้จึงไม่เจอ Access Denied อีก
+  const isLiveTtm = /booking\.thaiticketmajor\.com\/booking\/3m\/zones\.php/.test(opts.zonesUrl);
+  if (isLiveTtm) {
+    let fb: ReturnType<typeof curlBook> | Awaited<ReturnType<typeof curlBookWithFetcher>> = curlBook({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty });
+    if (!fb.ok) {
       try {
         const fetcher = hardenedFetcher();
         fb = await curlBookWithFetcher({ zonesUrl: opts.zonesUrl, code: opts.code, quantity: qty, fetcher });
@@ -139,39 +130,46 @@ export async function book(opts: BookOptions): Promise<BookResult> {
         fb = { ok: false, step: 'zones', k: '', round: '', zone: opts.code, seats: [], error: `fetcher: ${String(e).slice(0, 80)}`, jar: [] };
       }
     }
-    if (!fb.ok) {
-      return {
-        ok: false,
-        step: 'selectZone',
-        error: `${clickResult.error} | curl-first: ${fb.error}`,
-      };
+    if (fb.ok) {
+      // sync session cookies ลง context (PHPSESSID ตัวชี้ขาดตะกร้า) — กฎ sameSite จาก C02
+      try {
+        const pwCookies = (fb.jar ?? [])
+          .filter((c) => /thaiticketmajor\.com$/.test(c.domain.replace(/^\./, '')))
+          .filter((c) => !/^(?:_(?:ga|gcl|clck|clsk|fbp|twpid)|__(?:gads|gpi|eoi|lt__cid|lt__sid))/.test(c.name))
+          .map((c) => ({
+            name: c.name,
+            value: c.value,
+            domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
+            path: c.path ?? '/',
+            expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : -1,
+            httpOnly: Boolean(c.httpOnly),
+            secure: Boolean(c.secure),
+            sameSite: (c.secure ? 'None' : 'Lax') as 'None' | 'Lax',
+          }));
+        if (pwCookies.length) await opts.context.addCookies(pwCookies);
+      } catch {
+        // best effort — เดินหน้า payment ด้วย session ที่ browser มีอยู่
+      }
+      // hand-off: เปิดหน้า payment ด้วย session ที่เพิ่งล็อคที่นั่ง — จบที่นี่ ไม่แตะ zones ผ่าน Firefox
+      await page.goto('https://booking.thaiticketmajor.com/booking/3m/paymentall.php', {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000,
+      });
+      await payment(page);
+      throw new HumanStepRequired('payment');
     }
-    // sync session cookies ลง context (PHPSESSID ตัวชี้ขาดตะกร้า) — กฎ sameSite จาก C02
-    try {
-      const pwCookies = (fb.jar ?? [])
-        .filter((c) => /thaiticketmajor\.com$/.test(c.domain.replace(/^\./, '')))
-        .filter((c) => !/^(?:_(?:ga|gcl|clck|clsk|fbp|twpid)|__(?:gads|gpi|eoi|lt__cid|lt__sid))/.test(c.name))
-        .map((c) => ({
-          name: c.name,
-          value: c.value,
-          domain: c.domain.startsWith('.') ? c.domain : `.${c.domain}`,
-          path: c.path ?? '/',
-          expires: typeof c.expires === 'number' && c.expires > 0 ? c.expires : -1,
-          httpOnly: Boolean(c.httpOnly),
-          secure: Boolean(c.secure),
-          sameSite: (c.secure ? 'None' : 'Lax') as 'None' | 'Lax',
-        }));
-      if (pwCookies.length) await opts.context.addCookies(pwCookies);
-    } catch {
-      // best effort — เดินหน้า payment ด้วย session ที่ browser มีอยู่
-    }
-    // hand-off: เปิดหน้า payment ด้วย session ที่เพิ่งล็อคที่นั่ง
-    await page.goto('https://booking.thaiticketmajor.com/booking/3m/paymentall.php', {
-      waitUntil: 'domcontentloaded',
-      timeout: 15_000,
-    });
-    await payment(page);
-    throw new HumanStepRequired('payment');
+    // curl-first ล้มเหลวทั้งสองแบบ → เดิน Firefox path เดิมต่อ (ยังมีโอกาสบางกรณี)
+  }
+
+  // 1. Open the zones page and click the zone anchor (fallback path).
+  await page.goto(opts.zonesUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+  const clickResult = await selectZone(page, opts.code);
+  if (!clickResult.ok) {
+    return {
+      ok: false,
+      step: 'selectZone',
+      error: clickResult.error,
+    };
   }
 
   // 2. Quantity selector (number input). Default 1 if field absent.
