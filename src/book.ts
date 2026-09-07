@@ -181,7 +181,7 @@ export async function book(opts: BookOptions): Promise<BookResult> {
           ok: false,
           step: 'payment',
           error: 'งานนี้ยังไม่เริ่มจำหน่าย — ระบบล็อคโครงสร้างได้ แต่ TTM ยังไม่เปิดหน้าชำระเงิน (ดูวัน/เวลาเปิดขายบนหน้างาน) — กลับมากดจองอีกครั้งตอนเปิดขายจริง',
-          gateReason?: string,
+          gateReason: 'sale-not-open',
         };
       }
       await payment(page);
