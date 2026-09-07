@@ -939,7 +939,7 @@ async function doDiscover(){
   discovering=true;
   const btn=$('discoverBtn'), meta=$('discoverMeta'), pill=$('discoverPill'), age=$('discoverAge');
   btn.disabled=true; btn.textContent='… กำลังโหลด';
-  meta.textContent='กำลังดึงรายการจาก TTM (ใช้เวลา ~20 วิ)…';
+  meta.textContent='กำลังดึงรายการจาก TTM (~10-15 วิ)…';
   pill.style.display='none';
   try{
     const r=await fetch('/api/events/discover?limit=18');
