@@ -1073,6 +1073,7 @@ $('bookBtn').addEventListener('click', async()=>{
       let msg;
       if (reason === 'sale-not-open') msg = '🛈 งานนี้ยังไม่เริ่มจำหน่าย — ระบบทำงานถูกต้องทุกขั้น แต่ TTM ยังไม่เปิดหน้าชำระเงิน (ดูวันเปิดขายบนหน้างาน แล้วกลับมาจองตอนเปิดขาย)';
       else if ((body.error||'').includes('Access Denied') || (body.error||'').includes('โดนบล็อก')) msg = 'เซสชันหมดอายุหรือถูกบล็อก — วาง PHPSESSID ใหม่ใน "สะพานเซสชัน" ด้านล่าง แล้วกดจองใหม่';
+      else if ((body.error||'').includes('ยังไม่ล็อคที่นั่งจริง')) msg = 'งานนี้ยังไม่เปิดจองจริง — หน้าโซน/ที่นั่งแสดงได้ แต่ TTM ยังไม่รับการล็อค (ดูวันเปิดขายบนหน้างาน แล้วกลับมาตอนเปิดขาย)';
       else if ((body.error||'').includes('signin bounce')) msg = 'เซสชันหมดอายุ — วาง PHPSESSID ใหม่ใน "สะพานเซสชัน" ด้านล่าง';
       else if ((body.error||'').includes('no available seats')) msg = 'ไม่มีที่นั่งว่างในโซนนี้ — ลองโซนอื่น';
       else if ((body.error||'').includes('no confirm button')) msg = 'โซนนี้เต็มแล้ว — ลองโซนอื่น';

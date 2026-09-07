@@ -209,6 +209,16 @@ export function curlBook(opts: {
     return { ok: false, step: 'validateseat', k, round, zone: opts.code, seats: picks, error: `validateseat http ${v.code} body=${v.body.slice(0, 120)}`, jar: cookies };
   }
 
+  // VERIFY (wayfinder: 'ผลล็อคปลอม' bug): validateseat ตอบ result:true แม้ sale
+  // ยังไม่เปิด (TTM no-op) — พิสูจน์ว่าล็อคจริงด้วยการโหลด fixed.php ซ้ำ:
+  // ถ้าที่นั่งที่เราเลือกยังเป็น seatuncheck (ว่าง) = ไม่มีการล็อคเกิดขึ้น
+  const vRefetch = curlReq(fixedUrl, { 'Cookie': stepCookie, 'User-Agent': UA_CURL, 'Referer': opts.zonesUrl });
+  const refSeats = parseSeats(vRefetch.body);
+  const stillFree = picks.filter((p) => refSeats.some((s) => s.title === p.title));
+  if (stillFree.length === picks.length && picks.length > 0) {
+    return { ok: false, step: 'validateseat', k, round, zone: opts.code, seats: picks, error: 'TTM ยังไม่ล็อคที่นั่งจริง — งานนี้ยังไม่เปิดจอง (validateseat ตอบยอมรับแต่ไม่มีผล) — กลับมาจองตอนเปิดขายตามวัน/เวลาบนหน้างาน', jar: cookies };
+  }
+
   return { ok: true, step: 'done', k, round, zone: opts.code, seats: picks, jar: cookies };
 }
 

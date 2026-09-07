@@ -197,7 +197,9 @@ export async function book(opts: BookOptions): Promise<BookResult> {
     return {
       ok: false,
       step: 'selectZone',
-      error: clickResult.error,
+      error: clickResult.error.includes('no anchor')
+        ? `${clickResult.error} | สาเหตุที่พบบ่อย: เซสชันหมดอายุ — วาง PHPSESSID ใหม่ใน "สะพานเซสชัน" แล้วลองอีกครั้ง`
+        : clickResult.error,
     };
   }
 
