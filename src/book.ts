@@ -49,7 +49,7 @@ export interface BookResult {
   /** A typed reason when ok is false. */
   error?: string;
   /** Auth verdict (when `step === 'gate'`). */
-  gateReason?: 'no_auth' | 'expired' | 'no_phase1';
+  gateReason?: string;
 }
 
 /** Sentinel thrown by `awaitHuman` to ask the UI to halt for input. */
@@ -165,11 +165,23 @@ export async function book(opts: BookOptions): Promise<BookResult> {
       })).catch(() => ({ title: '?', text: '', url: '?' }));
       const denied = /Access Denied/i.test(payCheck.title + ' ' + payCheck.text);
       const bounced = /signin\.php/i.test(payCheck.url) || (/url=\s*\/?user\/signin\.php/i.test(payCheck.text) && payCheck.text.length < 400);
+      // TTM: validateseat ยอมรับแม้งานยังไม่เปิดขาย — แต่ paymentall.php จะ
+      // redirect กลับหน้าแรก (พร้อม banner countdown วันเปิดขาย) — แยกกรณีนี้
+      const saleNotOpen = /booking\.thaiticketmajor\.com\/?$/.test(payCheck.url)
+        || /thaiticketmajor\.com\/?$/.test(payCheck.url);
       if (denied || bounced) {
         return {
           ok: false,
           step: 'payment',
           error: `หน้าชำระเงินโดนบล็อก (${denied ? 'Access Denied' : 'signin bounce'}) — ที่นั่งยังล็อคอยู่ในเซสชัน curl ลองเปิดลิงก์จองใน Firefox ปกติของคุณเพื่อจ่ายต่อ`,
+        };
+      }
+      if (saleNotOpen) {
+        return {
+          ok: false,
+          step: 'payment',
+          error: 'งานนี้ยังไม่เริ่มจำหน่าย — ระบบล็อคโครงสร้างได้ แต่ TTM ยังไม่เปิดหน้าชำระเงิน (ดูวัน/เวลาเปิดขายบนหน้างาน) — กลับมากดจองอีกครั้งตอนเปิดขายจริง',
+          gateReason?: string,
         };
       }
       await payment(page);

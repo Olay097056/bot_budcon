@@ -1069,13 +1069,16 @@ $('bookBtn').addEventListener('click', async()=>{
     }
     else if(body.ok) $('bookNote').textContent='จองสำเร็จ: '+JSON.stringify(body);
     else {
-      const errMap={
-        'no confirm button':'โซนนี้เต็มแล้ว — ลองโซนอื่น',
-        'no available seats in zone (all seatnotavail)':'ไม่มีที่นั่งว่างในโซนนี้ — ลองโซนอื่น',
-        'TTM sale not open':'งานนี้ยังไม่เปิดขายรอบนี้',
-      };
-      $('bookNote').textContent = errMap[body.error] || ('จองไม่สำเร็จ: '+(body.error||body.step));
-      $('bookNote').className='note warn';
+      const reason = body.gateReason || '';
+      let msg;
+      if (reason === 'sale-not-open') msg = '🛈 งานนี้ยังไม่เริ่มจำหน่าย — ระบบทำงานถูกต้องทุกขั้น แต่ TTM ยังไม่เปิดหน้าชำระเงิน (ดูวันเปิดขายบนหน้างาน แล้วกลับมาจองตอนเปิดขาย)';
+      else if ((body.error||'').includes('Access Denied') || (body.error||'').includes('โดนบล็อก')) msg = 'เซสชันหมดอายุหรือถูกบล็อก — วาง PHPSESSID ใหม่ใน "สะพานเซสชัน" ด้านล่าง แล้วกดจองใหม่';
+      else if ((body.error||'').includes('signin bounce')) msg = 'เซสชันหมดอายุ — วาง PHPSESSID ใหม่ใน "สะพานเซสชัน" ด้านล่าง';
+      else if ((body.error||'').includes('no available seats')) msg = 'ไม่มีที่นั่งว่างในโซนนี้ — ลองโซนอื่น';
+      else if ((body.error||'').includes('no confirm button')) msg = 'โซนนี้เต็มแล้ว — ลองโซนอื่น';
+      else msg = 'จองไม่สำเร็จ: ' + (body.error || body.step);
+      $('bookNote').textContent = msg;
+      $('bookNote').className='note ' + (reason === 'sale-not-open' ? '' : 'warn');
     }
   }catch(e){ $('bookNote').textContent='book error: '+e.message; }
   finally{ $('bookBtn').disabled=false; }
